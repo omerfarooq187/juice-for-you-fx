@@ -1,0 +1,52 @@
+name: Build Juice For U MSI
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build-windows-msi:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Set up JDK 21
+      uses: actions/setup-java@v3
+      with:
+        distribution: temurin
+        java-version: '21'
+
+    - name: Build Maven project
+      run: mvn clean package -DskipTests
+
+    - name: Create MSI with jpackage
+      run: |
+        $jar="target/JuiceForU-1.0-shaded.jar"
+        $icon="src\main\resources\com\innovatewithomer\juiceforu\logo_launcher\logo.ico"
+        $dest="target\installer"
+        jpackage `
+          --type msi `
+          --name "Juice For U" `
+          --input "target" `
+          --main-jar "JuiceForU-1.0-shaded.jar" `
+          --main-class "com.innovatewithomer.juiceforu.JuiceForYouApp" `
+          --icon $icon `
+          --dest $dest `
+          --win-shortcut `
+          --win-menu `
+          --win-dir-chooser `
+          --win-per-user-install `
+          --app-version 1.2 `
+          --vendor "InnovateWithOmer" `
+          --description "Juice For U - POS Application" `
+          --verbose
+
+    - name: Upload MSI artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: JuiceForU-MSI
+        path: target/installer/*.msi
