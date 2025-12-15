@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<?import javafx.geometry.Insets?>
+<BorderPane xmlns:fx="http://javafx.com/fxml"
+            fx:controller="com.innovatewithomer.juiceforu.controller.RecipeController"
+            stylesheets="@./styles/style.css">
+
+    <top>
+        <HBox spacing="10">
+            <padding>
+                <Insets top="10" right="10" bottom="10" left="10"/>
+            </padding>
+
+            <Label text="Menu Item:"/>
+            <ComboBox fx:id="menuItemCombo" prefWidth="200"/>
+
+            <Label text="Ingredient:"/>
+            <ComboBox fx:id="ingredientCombo" prefWidth="200"/>
+
+            <Label text="Quantity Needed:"/>
+            <TextField fx:id="quantityField" prefWidth="80"/>
+
+            <Button text="Add Recipe" onAction="#handleAddRecipe" styleClass="btn-success"/>
+        </HBox>
+    </top>
+
+    <center>
+        <TableView fx:id="recipeTable">
+            <columns>
+                <TableColumn fx:id="colIngredient" text="Ingredient" prefWidth="200"/>
+                <TableColumn fx:id="colQuantity" text="Quantity Needed" prefWidth="150"/>
+                <TableColumn fx:id="colUnit" text="Unit" />
+            </columns>
+        </TableView>
+    </center>
+
+    <bottom>
+        <HBox spacing="10">
+            <padding>
+                <Insets top="10" right="10" bottom="10" left="10"/>
+            </padding>
+            <Button text="Edit Selected" onAction="#handleEditRecipe" styleClass="btn-success"/>
+            <Button text="Delete Selected" onAction="#handleDeleteRecipe" styleClass="btn-danger"/>
+        </HBox>
+    </bottom>
+
+</BorderPane>

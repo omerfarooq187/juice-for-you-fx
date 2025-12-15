@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.Region?>
+<?import javafx.scene.layout.VBox?>
+
+<VBox spacing="15" xmlns="http://javafx.com/javafx/21"
+      xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="com.innovatewithomer.juiceforu.controller.OrderHistoryController"
+      stylesheets="@./styles/style.css">
+
+    <!-- Title -->
+    <Label text="Order History" styleClass="h2"/>
+
+    <!-- Filter + Action Bar -->
+    <HBox spacing="10">
+        <Button text="Today" styleClass="btn-filter" onAction="#onTodayFilter"/>
+        <Button text="Weekly" styleClass="btn-filter" onAction="#onWeeklyFilter"/>
+        <Button text="Monthly" styleClass="btn-filter" onAction="#onMonthlyFilter"/>
+
+        <Region HBox.hgrow="ALWAYS"/>
+
+        <!-- 💸 New Discount Button -->
+        <Button text="Apply Discount"
+                styleClass="btn-success"
+                onAction="#onApplyDiscountClick">
+            <tooltip>
+                <Tooltip text="Apply discount to selected order"/>
+            </tooltip>
+        </Button>
+
+        <!-- 🔄 Refresh Button -->
+        <Button text="Refresh" styleClass="btn-refresh" onAction="#onLoadOrdersClick">
+            <tooltip>
+                <Tooltip text="Reload all orders"/>
+            </tooltip>
+        </Button>
+    </HBox>
+
+    <!-- Sales Summary -->
+    <HBox spacing="25" alignment="CENTER">
+        <Label fx:id="todaySalesLabel" text="Today: Rs. 0" styleClass="sales-label"/>
+        <Label fx:id="weeklySalesLabel" text="Weekly: Rs. 0" styleClass="sales-label"/>
+        <Label fx:id="monthlySalesLabel" text="Monthly: Rs. 0" styleClass="sales-label"/>
+    </HBox>
+
+    <!-- Orders Table -->
+    <TableView fx:id="ordersTable">
+        <columns>
+            <TableColumn fx:id="idColumn" text="Order ID" prefWidth="100"/>
+            <TableColumn fx:id="itemsColumn" text="Items" prefWidth="200"/>
+            <TableColumn fx:id="totalColumn" text="Total" prefWidth="130"/>
+            <TableColumn fx:id="dateColumn" text="Created At" prefWidth="150"/>
+            <TableColumn fx:id="orderTypeColumn" text="Order Type" prefWidth="120"/>
+            <TableColumn fx:id="statusColumn" text="Status" prefWidth="120"/>
+            <TableColumn fx:id="actionsColumn" text="Actions" prefWidth="90"/>
+        </columns>
+    </TableView>
+
+</VBox>

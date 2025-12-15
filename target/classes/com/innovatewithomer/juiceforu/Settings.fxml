@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<VBox xmlns:fx="http://javafx.com/fxml"
+      fx:controller="com.innovatewithomer.juiceforu.controller.SettingsController"
+      spacing="15"
+      style="-fx-padding: 20;">
+
+    <!-- Title -->
+    <Label text="⚙ Settings"
+           styleClass="h3"
+           style="-fx-padding: 10;"/>
+
+    <!-- Theme Selector -->
+    <HBox spacing="10">
+        <Label text="Theme:"/>
+        <ChoiceBox fx:id="themeChoice"/>
+    </HBox>
+
+    <!-- Company Info -->
+    <HBox spacing="10">
+        <Label text="Company Name:"/>
+        <TextField fx:id="companyNameField" promptText="Enter name"/>
+    </HBox>
+
+    <HBox spacing="10">
+        <Label text="Contact Email:"/>
+        <TextField fx:id="emailField" promptText="Enter email"/>
+    </HBox>
+
+    <!-- Save Button -->
+    <Button text="Save Settings"
+            onAction="#onSaveSettingsClick"
+            styleClass="btn btn-primary"/>
+
+</VBox>

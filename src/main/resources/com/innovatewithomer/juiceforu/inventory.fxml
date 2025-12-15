@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<BorderPane xmlns:fx="http://javafx.com/fxml"
+            fx:controller="com.innovatewithomer.juiceforu.controller.InventoryController"
+            stylesheets="@./styles/style.css">
+
+    <top>
+        <Label text="Inventory Management" style="-fx-font-size: 20px; -fx-padding: 10;" />
+    </top>
+
+    <center>
+        <TableView fx:id="inventoryTable">
+            <columns>
+                <TableColumn fx:id="colItemId" text="ID" prefWidth="50"/>
+                <TableColumn fx:id="colItemName" text="Item Name" prefWidth="150"/>
+                <TableColumn fx:id="colQuantity" text="Quantity" prefWidth="100"/>
+                <TableColumn fx:id="colUnit" text="Unit" prefWidth="100"/>
+            </columns>
+        </TableView>
+    </center>
+
+    <bottom>
+        <HBox spacing="10" style="-fx-padding: 10;">
+            <TextField fx:id="itemNameField" promptText="Item Name"/>
+            <TextField fx:id="quantityField" promptText="Quantity"/>
+            <TextField fx:id="unitField" promptText="Unit"/>
+            <Button text="Add" onAction="#handleAdd" styleClass="btn-success"/>
+            <Button text="Update" onAction="#handleUpdate" styleClass="btn-success"/>
+            <Button text="Delete" onAction="#handleDelete" styleClass="btn-success"/>
+        </HBox>
+    </bottom>
+</BorderPane>

@@ -1,0 +1,427 @@
+/* ------------------------------
+   Typography (Headings)
+--------------------------------*/
+.h2 {
+    -fx-font-size: 20px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #2c3e50;
+}
+
+.h3 {
+    -fx-font-size: 18px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #2c3e50;
+}
+
+/* ------------------------------
+   Layout Helpers
+--------------------------------*/
+.header-bar {
+    -fx-alignment: center-left;
+    -fx-padding: 12;
+    -fx-background-color: #f8f9fa;
+    -fx-border-color: #ddd;
+    -fx-border-width: 0 0 1 0;
+}
+
+.header-actions {
+    -fx-alignment: center-right;
+}
+
+.card {
+    -fx-background-color: white;
+    -fx-background-radius: 15;
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.15), 6,0,0,3);
+    -fx-padding: 15;
+}
+
+.card-title {
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #555;
+}
+
+.card-value-success {
+    -fx-font-size: 18px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #28a745;
+}
+
+.card-value-info {
+    -fx-font-size: 18px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #17a2b8;
+}
+
+/* ------------------------------
+   Buttons
+--------------------------------*/
+/* ------------------------------
+   Base Button Style
+--------------------------------*/
+.button {
+    -fx-text-fill: white;
+    -fx-font-weight: bold;
+    -fx-cursor: hand;
+    -fx-background-radius: 20;
+    -fx-border-radius: 20;
+    -fx-padding: 6 14;   /* consistent padding */
+    -fx-font-size: 13px;
+}
+
+/* Primary (Orange) */
+.btn-primary {
+    -fx-background-color: #ff9800;
+}
+.btn-primary:hover {
+    -fx-background-color: #fb8c00;
+}
+
+/* Success (Green) */
+/* Keep the first one for main buttons */
+.btn-success {
+    -fx-background-color: #43a047;
+    -fx-text-fill: white;
+    -fx-font-weight: bold;
+    -fx-background-radius: 8;
+}
+
+/* Rename the second one for summary or soft green */
+.btn-success-light {
+    -fx-background-color: #2ecc71;
+    -fx-text-fill: white;
+    -fx-font-weight: bold;
+    -fx-background-radius: 8;
+}
+.btn-success-light:hover {
+    -fx-background-color: #27ae60;
+}
+
+/* Danger (Red) */
+.btn-danger {
+    -fx-background-color: #e53935;
+}
+.btn-danger:hover {
+    -fx-background-color: #c62828;
+}
+
+
+
+/* Filter buttons (Orange outline style) */
+.btn-filter {
+    -fx-background-color: #ffe0b2; /* light orange background */
+    -fx-text-fill: #e65100;        /* dark orange text */
+    -fx-background-radius: 6;
+    -fx-padding: 6 12;
+    -fx-font-weight: bold;
+}
+.btn-filter:hover {
+    -fx-background-color: #ffcc80; /* stronger orange */
+}
+
+/* Refresh button (Orange variant) */
+.btn-refresh {
+    -fx-background-color: #fff3e0; /* very light orange */
+    -fx-text-fill: #ef6c00;
+    -fx-background-radius: 6;
+    -fx-padding: 6 12;
+    -fx-font-weight: bold;
+}
+.btn-refresh:hover {
+    -fx-background-color: #ffe0b2;
+}
+
+/* Icon button (inside table rows) */
+.btn-icon {
+    -fx-background-color: transparent;
+    -fx-text-fill: #ff9800; /* orange icon */
+    -fx-font-size: 14px;
+    -fx-cursor: hand;
+}
+.btn-icon:hover {
+    -fx-text-fill: #fb8c00; /* darker orange on hover */
+}
+.button-edit {
+    -fx-background-color: #4CAF50; /* Green */
+    -fx-text-fill: white;
+    -fx-font-weight: bold;
+    -fx-background-radius: 8;
+    -fx-cursor: hand;
+}
+
+.button-edit:hover {
+    -fx-background-color: #45a049;
+}
+
+.button-delete {
+    -fx-background-color: #f44336; /* Red */
+    -fx-text-fill: white;
+    -fx-font-weight: bold;
+    -fx-background-radius: 8;
+    -fx-cursor: hand;
+}
+
+.button-delete:hover {
+    -fx-background-color: #d32f2f;
+}
+
+
+/* ------------------------------
+   Tables
+--------------------------------*/
+.table-view {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+    -fx-table-cell-border-color: transparent;
+    -fx-padding: 0;
+}
+
+.table-view .column-header-background {
+    -fx-background-color: #f4f6f8;
+    -fx-border-color: #ddd;
+}
+
+.table-view .column-header,
+.table-view .column-header .label {
+    -fx-font-weight: bold;
+    -fx-text-fill: #444;
+    -fx-alignment: CENTER_LEFT;
+    -fx-padding: 8;
+}
+
+.table-view .table-row-cell {
+    -fx-cell-size: 40px;
+    -fx-background-color: white;
+}
+
+.table-view .table-row-cell:odd {
+    -fx-background-color: #f9f9f9; /* striped rows */
+}
+
+.table-view .table-row-cell:hover {
+    -fx-background-color: #e3f2fd; /* hover effect */
+}
+
+.modern-table {
+    -fx-border-color: #ddd;
+    -fx-border-radius: 6;
+    -fx-background-radius: 6;
+    -fx-table-cell-border-color: #eee;
+}
+
+/* ------------------------------
+   Charts
+--------------------------------*/
+.chart-pie-label {
+    -fx-font-size: 12px;
+    -fx-font-weight: bold;
+    -fx-fill: #444;
+}
+
+
+/* ------------------------------
+   Sidebar
+--------------------------------*/
+.sidebar {
+    -fx-background-color: #ffffff;
+    -fx-padding: 16;
+    -fx-border-width: 0 1 0 0;
+    -fx-border-color: #e0e0e0;
+}
+
+.sidebar-title {
+    -fx-font-size: 16px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #ff9800;
+    -fx-padding: 8 0 12 0;
+}
+
+/* Sidebar buttons */
+.btn-sidebar {
+    -fx-background-color: transparent;
+    -fx-text-fill: #444;
+    -fx-alignment: center-left;
+    -fx-padding: 10 14;
+    -fx-font-size: 14px;
+    -fx-background-radius: 6;
+    -fx-cursor: hand;
+}
+.btn-sidebar:hover {
+    -fx-background-color: #ffe0b2; /* light orange hover */
+}
+.btn-sidebar:focused, .btn-sidebar:selected {
+    -fx-background-color: #ff9800;
+    -fx-text-fill: white;
+}
+
+/* Exit button styled differently */
+.btn-sidebar-exit {
+    -fx-background-color: transparent;
+    -fx-text-fill: #e53935;
+    -fx-alignment: center-left;
+    -fx-padding: 10 14;
+    -fx-font-size: 14px;
+}
+.btn-sidebar-exit:hover {
+    -fx-background-color: #ffcdd2;
+}
+
+/* ------------------------------
+   Header
+--------------------------------*/
+.header-bar {
+    -fx-background-color: #fafafa;
+    -fx-padding: 12 16;
+    -fx-alignment: center-left;
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.1), 4,0,0,2);
+}
+
+/* ------------------------------
+   Content Area
+--------------------------------*/
+.content-area {
+    -fx-background-color: #f5f6fa;
+    -fx-padding: 20;
+}
+
+.dialog-pane {
+    -fx-background-color: #ffffff;
+    -fx-border-radius: 12;
+    -fx-background-radius: 12;
+    -fx-padding: 10;
+}
+
+.dialog-pane > .header-panel {
+    -fx-background-color: #ff4444;
+    -fx-text-fill: white;
+    -fx-font-weight: bold;
+    -fx-padding: 6;
+}
+
+.dialog-pane .button {
+    -fx-background-radius: 20;
+    -fx-padding: 6 14;
+    -fx-font-weight: bold;
+}
+
+.sales-label {
+    -fx-font-size: 15px;
+    -fx-font-weight: bold;
+}
+
+/* Panels */
+.glass-box {
+    -fx-background-color: rgba(255, 255, 255, 0.85);
+    -fx-background-radius: 12;
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.1), 12, 0.3, 0, 3);
+}
+
+/* Section Titles */
+.section-title {
+    -fx-font-size: 18px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #2b2b2b;
+}
+
+.order-id {
+    -fx-font-size: 13px;
+    -fx-text-fill: #777;
+}
+
+/* Input Fields */
+.input-field {
+    -fx-background-radius: 6;
+    -fx-background-color: #f9f9f9;
+    -fx-border-color: #ddd;
+    -fx-border-radius: 6;
+    -fx-padding: 5 8 5 8;
+}
+
+/* Table */
+.modern-table {
+    -fx-background-color: transparent;
+    -fx-table-cell-border-color: transparent;
+    -fx-border-radius: 8;
+    -fx-border-color: #eee;
+}
+
+/* Summary Section */
+.summary-box {
+    -fx-padding: 10 0 0 0;
+}
+
+.summary-text {
+    -fx-font-size: 14px;
+    -fx-text-fill: #444;
+}
+
+.summary-total {
+    -fx-font-size: 16px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #1a7c4a;
+}
+
+.tip-text {
+    -fx-font-size: 12px;
+    -fx-text-fill: #777;
+}
+
+/* Buttons */
+.btn-primary {
+    -fx-background-color: linear-gradient(to right, #1fc88a, #16a46b);
+    -fx-text-fill: white;
+    -fx-font-weight: bold;
+    -fx-background-radius: 8;
+    -fx-padding: 10 14;
+    -fx-font-size: 14px;
+}
+
+.btn-primary:hover {
+    -fx-background-color: linear-gradient(to right, #20d598, #149b60);
+}
+.section-title {
+    -fx-font-size: 20px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #2b2b2b;
+}
+
+.input-rounded {
+    -fx-background-radius: 10;
+    -fx-border-radius: 10;
+    -fx-padding: 6 10;
+    -fx-pref-height: 36;   /* 💡 Ensures both TextField & ComboBox same height */
+}
+
+.side-panel {
+    -fx-background-color: linear-gradient(to bottom right, #ffffff, #f2f5f7);
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.08), 8, 0, 0, 2);
+}
+
+.order-panel {
+    -fx-background-color: #ffffff;
+    -fx-background-radius: 10;
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.1), 10, 0, 0, 2);
+}
+
+.modern-table {
+    -fx-border-color: #e0e0e0;
+    -fx-background-radius: 6;
+}
+
+.summary-box {
+    -fx-background-color: #f9f9f9;
+    -fx-background-radius: 8;
+    -fx-padding: 12;
+}
+
+.summary-total {
+    -fx-font-size: 16px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #2c3e50;
+}
+
+
+.table-row-cell:selected {
+    -fx-background-color: #0f62fe22; /* light blue tint */
+    -fx-text-fill: black;
+}

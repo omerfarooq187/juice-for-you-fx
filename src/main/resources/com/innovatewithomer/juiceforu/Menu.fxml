@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<BorderPane xmlns="http://javafx.com/javafx/21"
+            xmlns:fx="http://javafx.com/fxml"
+            fx:controller="com.innovatewithomer.juiceforu.controller.MenuController"
+            style="-fx-padding: 20;"
+            stylesheets="@./styles/style.css">
+
+    <!-- ===== Top Header ===== -->
+    <top>
+        <Label text="Manage Menu Items"
+               style="-fx-font-size: 20; -fx-font-weight: bold; -fx-padding: 10;"/>
+    </top>
+
+    <!-- ===== Center (Table) ===== -->
+    <center>
+        <TableView fx:id="menuTable" prefHeight="400">
+            <columns>
+                <TableColumn fx:id="colId" text="ID" prefWidth="50"/>
+                <TableColumn fx:id="colCategory" text="Category" prefWidth="150"/>
+                <TableColumn fx:id="colName" text="Item Name" prefWidth="200"/>
+                <TableColumn fx:id="colSize" text="Size" prefWidth="100"/>
+                <TableColumn fx:id="colPrice" text="Price (Rs.)" prefWidth="120"/>
+                <TableColumn fx:id="colActions" text="Actions" prefWidth="180" />
+            </columns>
+        </TableView>
+
+    </center>
+
+    <!-- ===== Bottom (Form to add new item) ===== -->
+    <bottom>
+        <VBox spacing="10" style="-fx-padding: 15;">
+            <Label text="Add New Menu Item" style="-fx-font-size: 16; -fx-font-weight: bold;"/>
+
+            <HBox spacing="10">
+                <TextField fx:id="txtCategory" promptText="Category (e.g. Fresh Juice)"/>
+                <TextField fx:id="txtName" promptText="Item Name"/>
+                <TextField fx:id="txtSize" promptText="Size (R/L)" />
+                <TextField fx:id="txtPrice" promptText="Price"/>
+                <Button text="Add Item" onAction="#onAddItemClick" styleClass="btn-success"/>
+            </HBox>
+        </VBox>
+    </bottom>
+</BorderPane>
