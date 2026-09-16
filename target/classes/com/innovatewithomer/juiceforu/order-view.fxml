@@ -1,129 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
-
-<?import javafx.scene.layout.*?>
-<?import javafx.geometry.Insets?>
-<?import javafx.scene.control.*?>
-<?import javafx.scene.text.*?>
-
-<BorderPane xmlns="http://javafx.com/javafx"
-            xmlns:fx="http://javafx.com/fxml"
-            fx:controller="com.innovatewithomer.juiceforu.controller.OrderController"
-            stylesheets="@./styles/style.css">
-
-    <!-- LEFT SIDE: MENU -->
-    <left>
-        <VBox spacing="14" styleClass="side-panel">
-            <padding>
-                <Insets top="20" right="15" bottom="20" left="15"/>
-            </padding>
-
-            <!-- Title -->
-            <Label text="Menu" styleClass="section-title"/>
-
-            <!-- Search & Filter -->
-            <HBox spacing="10">
-                <TextField fx:id="searchField"
-                           promptText="🔍 Search item..."
-                           prefWidth="200"
-                           prefHeight="36"
-                           styleClass="input-rounded"/>
-                <ComboBox fx:id="categoryFilter"
-                          promptText="All Categories"
-                          prefWidth="140"
-                          prefHeight="36"
-                          styleClass="input-rounded"/>
-            </HBox>
-
-            <!-- Menu List -->
-            <ListView fx:id="menuList"
-                      prefWidth="300"
-                      prefHeight="480"
-                      styleClass="menu-list"/>
-        </VBox>
-    </left>
-
-    <!-- RIGHT SIDE: ORDER PANEL -->
-    <center>
-        <VBox spacing="18" styleClass="order-panel">
-            <padding>
-                <Insets top="20" right="20" bottom="20" left="20"/>
-            </padding>
-
-            <!-- Header -->
-            <HBox alignment="CENTER_LEFT" spacing="10">
-                <Label text="Current Order" styleClass="section-title"/>
-                <Label fx:id="orderIdLabel"
-                       text="Order #0001"
-                       style="-fx-font-size: 14px; -fx-text-fill: #666; -fx-font-weight: bold;"/>
-            </HBox>
-
-            <!-- Order Table -->
-            <TableView fx:id="orderTable"
-                       prefHeight="340"
-                       styleClass="modern-table">
-                <columns>
-                    <TableColumn fx:id="colItem" text="Item" prefWidth="170"/>
-                    <TableColumn fx:id="colQty" text="Qty" prefWidth="80"/>
-                    <TableColumn fx:id="colPrice" text="Price" prefWidth="90"/>
-                    <TableColumn fx:id="colActions" text="Actions" prefWidth="130"/>
-                </columns>
-            </TableView>
-
-            <!-- Order Details Section -->
-            <GridPane hgap="12" vgap="10">
-                <columnConstraints>
-                    <ColumnConstraints halignment="RIGHT" prefWidth="100"/>
-                    <ColumnConstraints prefWidth="180"/>
-                    <ColumnConstraints halignment="RIGHT" prefWidth="80"/>
-                    <ColumnConstraints prefWidth="220"/>
-                </columnConstraints>
-
-                <!-- Order Type -->
-                <Label text="Order Type:" GridPane.rowIndex="0" GridPane.columnIndex="0"/>
-                <ComboBox fx:id="orderTypeCombo"
-                          prefWidth="160"
-                          GridPane.rowIndex="0"
-                          GridPane.columnIndex="1"/>
-
-                <Label text="Charges:" GridPane.rowIndex="0" GridPane.columnIndex="2"/>
-                <TextField fx:id="chargesField"
-                           promptText="Charges"
-                           disable="true"
-                           GridPane.rowIndex="0"
-                           GridPane.columnIndex="3"/>
-
-                <!-- Phone -->
-                <Label text="Phone:" GridPane.rowIndex="1" GridPane.columnIndex="0"/>
-                <TextField fx:id="phoneField"
-                           promptText="Enter customer phone"
-                           GridPane.rowIndex="1"
-                           GridPane.columnIndex="1"
-                           GridPane.columnSpan="3"/>
-
-                <!-- Address -->
-                <Label text="Address:" GridPane.rowIndex="2" GridPane.columnIndex="0"/>
-                <TextField fx:id="addressField"
-                           promptText="Enter customer address"
-                           GridPane.rowIndex="2"
-                           GridPane.columnIndex="1"
-                           GridPane.columnSpan="3"/>
-            </GridPane>
-
-            <!-- Summary Section -->
-            <VBox spacing="10" styleClass="summary-box">
-                <Label fx:id="subtotalLabel" text="Subtotal: Rs. 0" styleClass="summary-text"/>
-                <Label fx:id="totalLabel" text="Total: Rs. 0" styleClass="summary-total"/>
-
-                <HBox spacing="10" alignment="CENTER_LEFT">
-                    <CheckBox fx:id="printReceiptCheck" text="🖨️ Print Receipt" selected="true"/>
-                </HBox>
-
-                <Button text="💾 Save Order"
-                        onAction="#onSaveOrderClick"
-                        styleClass="btn-success-light"
-                        maxWidth="Infinity"/>
-            </VBox>
-
-        </VBox>
-    </center>
-</BorderPane>
+<?import javafx.scene.control.*?><?import javafx.scene.layout.*?>
+<ScrollPane fitToWidth="true" fitToHeight="true" hbarPolicy="AS_NEEDED" vbarPolicy="AS_NEEDED"
+            xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1"
+            stylesheets="@./styles/style.css" fx:controller="com.innovatewithomer.juiceforu.controller.OrderController">
+<HBox spacing="16" styleClass="page">
+    <VBox spacing="12" styleClass="side-panel" HBox.hgrow="ALWAYS"><VBox spacing="3"><Label text="Choose items" styleClass="section-title"/><Label text="Search or filter the menu, then click an item to add it." styleClass="helper-text"/></VBox><HBox spacing="8"><TextField fx:id="searchField" promptText="Search menu…" HBox.hgrow="ALWAYS"/><ComboBox fx:id="categoryFilter" promptText="Category"/></HBox><ListView fx:id="menuList" VBox.vgrow="ALWAYS"><placeholder><Label text="No matching menu items"/></placeholder></ListView></VBox>
+    <VBox spacing="14" styleClass="order-panel" HBox.hgrow="ALWAYS"><HBox alignment="CENTER_LEFT"><VBox spacing="2"><Label text="Current order" styleClass="section-title"/><Label text="Review quantities before saving" styleClass="helper-text"/></VBox><Region HBox.hgrow="ALWAYS"/><Label fx:id="orderIdLabel" text="Order #…" styleClass="date-pill"/></HBox>
+        <TableView fx:id="orderTable" VBox.vgrow="ALWAYS"><placeholder><Label text="Your order is empty"/></placeholder><columns><TableColumn fx:id="colItem" text="ITEM" prefWidth="220"/><TableColumn fx:id="colQty" text="QTY" prefWidth="70"/><TableColumn fx:id="colPrice" text="PRICE" prefWidth="100"/><TableColumn fx:id="colActions" text="ACTIONS" prefWidth="150"/></columns></TableView>
+        <GridPane hgap="10" vgap="10"><columnConstraints><ColumnConstraints hgrow="SOMETIMES" percentWidth="20"/><ColumnConstraints hgrow="ALWAYS" percentWidth="30"/><ColumnConstraints hgrow="SOMETIMES" percentWidth="15"/><ColumnConstraints hgrow="ALWAYS" percentWidth="35"/></columnConstraints><Label text="Order type" GridPane.rowIndex="0"/><ComboBox fx:id="orderTypeCombo" maxWidth="Infinity" GridPane.columnIndex="1"/><Label text="Charges" GridPane.columnIndex="2"/><TextField fx:id="chargesField" promptText="0" GridPane.columnIndex="3"/><Label text="Phone" GridPane.rowIndex="1"/><TextField fx:id="phoneField" promptText="Customer phone" GridPane.rowIndex="1" GridPane.columnIndex="1"/><Label text="Address" GridPane.rowIndex="1" GridPane.columnIndex="2"/><TextField fx:id="addressField" promptText="Delivery address" GridPane.rowIndex="1" GridPane.columnIndex="3"/></GridPane>
+        <HBox alignment="CENTER_LEFT" spacing="12" styleClass="summary-box"><VBox spacing="3"><Label fx:id="subtotalLabel" text="Subtotal: Rs. 0" styleClass="summary-text"/><Label fx:id="totalLabel" text="Total: Rs. 0" styleClass="summary-total"/></VBox><Region HBox.hgrow="ALWAYS"/><CheckBox fx:id="printReceiptCheck" text="Print receipt" selected="true"/><Button fx:id="saveOrderButton" text="Save order" onAction="#onSaveOrderClick" styleClass="btn-primary"/></HBox>
+    </VBox>
+</HBox>
+</ScrollPane>

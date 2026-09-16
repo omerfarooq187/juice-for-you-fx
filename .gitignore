@@ -1,0 +1,15 @@
+.idea/
+*.iml
+
+# Maven build output
+target/
+dependency-reduced-pom.xml
+
+# SQLite runtime sidecars (the main database is intentionally kept)
+*.db-shm
+*.db-wal
+
+# Application logs and operating-system files
+*.log
+.DS_Store
+Thumbs.db

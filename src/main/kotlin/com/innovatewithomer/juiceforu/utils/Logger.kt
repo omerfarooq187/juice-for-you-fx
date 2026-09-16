@@ -1,5 +1,6 @@
 package com.innovatewithomer.juiceforu.utils
 
+import com.innovatewithomer.juiceforu.AppPaths
 import java.io.File
 import java.io.PrintWriter
 import java.io.StringWriter
@@ -9,7 +10,7 @@ import java.util.*
 object Logger {
 
     private val logFile: File by lazy {
-        val logDir = File(System.getProperty("user.dir"), "logs")
+        val logDir = AppPaths.dataDirectory.resolve("logs").toFile()
         if (!logDir.exists()) logDir.mkdirs()
         File(logDir, "app_log.txt")
     }

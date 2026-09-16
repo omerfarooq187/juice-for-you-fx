@@ -5,11 +5,19 @@ import javafx.fxml.FXML
 import javafx.scene.control.*
 import com.innovatewithomer.juiceforu.models.InventoryItem
 import com.innovatewithomer.juiceforu.repo.InventoryRepository
+import com.innovatewithomer.juiceforu.utils.DisposableController
+import com.innovatewithomer.juiceforu.utils.Logger
+import javafx.application.Platform
 import javafx.beans.property.SimpleDoubleProperty
 import javafx.beans.property.SimpleIntegerProperty
 import javafx.beans.property.SimpleStringProperty
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 
-class InventoryController {
+class InventoryController : DisposableController {
 
     @FXML private lateinit var inventoryTable: TableView<InventoryItem>
     @FXML private lateinit var colItemId: TableColumn<InventoryItem, Int>
@@ -23,6 +31,9 @@ class InventoryController {
 
     private val repo = InventoryRepository()
     private val inventoryData = FXCollections.observableArrayList<InventoryItem>()
+    private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var loadVersion = 0
+    private var saving = false
 
     @FXML
     fun initialize() {
@@ -32,7 +43,7 @@ class InventoryController {
         colQuantity.setCellValueFactory { SimpleDoubleProperty(it.value.quantity).asObject() }
         colUnit.setCellValueFactory { SimpleStringProperty(it.value.unit) }
 
-        // Load data from DB
+        inventoryTable.items = inventoryData
         refreshTable()
 
         // ✅ Add selection listener
@@ -46,18 +57,28 @@ class InventoryController {
     }
 
     private fun refreshTable() {
-        inventoryData.setAll(repo.getAllItems())
-        inventoryTable.items = inventoryData
+        val version = ++loadVersion
+        ioScope.launch {
+            try {
+                val items = repo.getAllItems()
+                Platform.runLater { if (version == loadVersion) inventoryData.setAll(items) }
+            } catch (e: Exception) {
+                Logger.logError(e, "Could not load inventory")
+                Platform.runLater { showAlert(Alert.AlertType.ERROR, "Inventory unavailable", "Could not load inventory: ${e.message}") }
+            }
+        }
     }
+
+    override fun dispose() = ioScope.cancel()
 
     @FXML
     fun handleAdd() {
         val name = itemNameField.text.trim()
-        val qty = quantityField.text.toDoubleOrNull() ?: 0.0
+        val qty = quantityField.text.toDoubleOrNull()
         val unit = unitField.text.trim()
 
-        if (name.isBlank() || unit.isBlank()) {
-            showAlert(Alert.AlertType.WARNING, "Validation Error", "Please fill all fields.")
+        if (name.isBlank() || unit.isBlank() || qty == null || qty < 0) {
+            showAlert(Alert.AlertType.WARNING, "Validation Error", "Enter a name, unit, and a non-negative quantity.")
             return
         }
 
@@ -76,36 +97,43 @@ class InventoryController {
             reorderLevel = 5.0 // default
         )
 
-        repo.addItem(newItem) // save to DB
-        refreshTable()
-        clearFields()
+        saveInventoryChange(onSuccess = { clearFields() }) { repo.addItem(newItem) }
     }
 
     @FXML
     fun handleUpdate() {
-        val selected = inventoryTable.selectionModel.selectedItem ?: return
+        val selected = inventoryTable.selectionModel.selectedItem ?: run {
+            showAlert(Alert.AlertType.WARNING, "No item selected", "Select an inventory row to update.")
+            return
+        }
         val id = selected.id
 
-        selected.name = itemNameField.text.trim()
-        selected.quantity = quantityField.text.toDoubleOrNull() ?: 0.0
-        selected.unit = unitField.text.trim()
-
-        repo.updateItem(selected) // update in DB
-        refreshTable()
-
-        // ✅ Reselect updated item
-        val updatedItem = inventoryData.find { it.id == id }
-        if (updatedItem != null) {
-            inventoryTable.selectionModel.select(updatedItem)
+        val name = itemNameField.text.trim()
+        val unit = unitField.text.trim()
+        val quantity = quantityField.text.toDoubleOrNull()
+        if (name.isBlank() || unit.isBlank() || quantity == null || quantity < 0) {
+            showAlert(Alert.AlertType.WARNING, "Validation Error", "Enter a name, unit, and a non-negative quantity.")
+            return
+        }
+        if (inventoryData.any { it.id != id && it.name.equals(name, ignoreCase = true) }) {
+            showAlert(Alert.AlertType.WARNING, "Duplicate Item", "Item '$name' already exists in inventory.")
+            return
         }
 
-         clearFields()
+        val updated = selected.copy(name = name, quantity = quantity, unit = unit)
+        saveInventoryChange(onSuccess = {
+            inventoryData.find { it.id == id }?.let { inventoryTable.selectionModel.select(it) }
+            clearFields()
+        }) { repo.updateItem(updated) }
     }
 
 
     @FXML
     fun handleDelete() {
-        val selected = inventoryTable.selectionModel.selectedItem ?: return
+        val selected = inventoryTable.selectionModel.selectedItem ?: run {
+            showAlert(Alert.AlertType.WARNING, "No item selected", "Select an inventory row to delete.")
+            return
+        }
 
         // ✅ Confirmation dialog
         val alert = Alert(Alert.AlertType.CONFIRMATION)
@@ -115,9 +143,37 @@ class InventoryController {
 
         val result = alert.showAndWait()
         if (result.isPresent && result.get() == ButtonType.OK) {
-            repo.deleteItem(selected.id) // delete from DB
-            refreshTable()
-            clearFields()
+            saveInventoryChange("Item is in use", { clearFields() }) { repo.deleteItem(selected.id) }
+        }
+    }
+
+    private fun saveInventoryChange(errorTitle: String = "Inventory change failed", onSuccess: () -> Unit = {}, change: () -> Unit) {
+        if (saving) return
+        saving = true
+        inventoryTable.isDisable = true
+        ++loadVersion
+        ioScope.launch {
+            try {
+                change()
+                val items = repo.getAllItems()
+                Platform.runLater {
+                    inventoryData.setAll(items)
+                    onSuccess()
+                }
+            } catch (e: Exception) {
+                Logger.logError(e, "Could not save inventory change")
+                Platform.runLater {
+                    val message = if (errorTitle == "Item is in use")
+                        "This ingredient belongs to a recipe and cannot be deleted yet."
+                    else e.message ?: "The inventory change could not be saved."
+                    showAlert(Alert.AlertType.ERROR, errorTitle, message)
+                }
+            } finally {
+                Platform.runLater {
+                    saving = false
+                    inventoryTable.isDisable = false
+                }
+            }
         }
     }
 
@@ -137,12 +193,14 @@ class InventoryController {
 
     // Called by OrderController
     fun deductInventoryById(ingredientId: Int, quantity: Double) {
-        val item = repo.getItemById(ingredientId)
-        if (item != null && item.quantity >= quantity) {
-            repo.adjustStock(ingredientId, -quantity)
-            refreshTable()
-        } else {
-            showAlert(Alert.AlertType.WARNING, "Stock Error", "⚠️ Not enough stock for ${item?.name ?: "Unknown ingredient"}")
+        ioScope.launch {
+            try {
+                repo.adjustStock(ingredientId, -quantity)
+                Platform.runLater { refreshTable() }
+            } catch (e: Exception) {
+                Logger.logError(e, "Could not deduct inventory")
+                Platform.runLater { showAlert(Alert.AlertType.WARNING, "Stock Error", e.message ?: "Not enough stock.") }
+            }
         }
     }
 }

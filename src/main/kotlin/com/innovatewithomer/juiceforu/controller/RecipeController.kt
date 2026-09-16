@@ -6,6 +6,9 @@ import com.innovatewithomer.juiceforu.models.RecipeItem
 import com.innovatewithomer.juiceforu.repo.RecipeRepository
 import com.innovatewithomer.juiceforu.repo.InventoryRepository
 import com.innovatewithomer.juiceforu.repo.MenuItemRepository
+import com.innovatewithomer.juiceforu.utils.DisposableController
+import com.innovatewithomer.juiceforu.utils.Logger
+import javafx.application.Platform
 import javafx.beans.property.ReadOnlyObjectWrapper
 import javafx.beans.property.SimpleStringProperty
 import javafx.collections.FXCollections
@@ -13,8 +16,14 @@ import javafx.fxml.FXML
 import javafx.scene.control.*
 import javafx.scene.image.Image
 import javafx.scene.image.ImageView
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 
-class RecipeController {
+class RecipeController : DisposableController {
 
     @FXML private lateinit var menuItemCombo: ComboBox<MenuItem>
     @FXML private lateinit var ingredientCombo: ComboBox<InventoryItem>
@@ -29,12 +38,15 @@ class RecipeController {
     private val inventoryRepo = InventoryRepository()
 
     private val recipeRows = FXCollections.observableArrayList<RecipeRow>()
+    private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var recipeLoadJob: Job? = null
+    private var recipeLoadVersion = 0
+    private var saving = false
 
     @FXML
     fun initialize() {
-        // Load data into combos
-        menuItemCombo.items = FXCollections.observableArrayList(menuRepo.getAllMenuItems())
-        ingredientCombo.items = FXCollections.observableArrayList(inventoryRepo.getAllItems())
+        menuItemCombo.items = FXCollections.observableArrayList()
+        ingredientCombo.items = FXCollections.observableArrayList()
 
         // Show only the name for Menu Items
         menuItemCombo.setCellFactory {
@@ -80,10 +92,19 @@ class RecipeController {
             menuItemCombo.value?.id?.let { loadRecipesForMenuItem(it) }
         }
 
-        // Auto-select the first menu item
-        if (menuItemCombo.items.isNotEmpty()) {
-            menuItemCombo.selectionModel.selectFirst()
-            menuItemCombo.value?.id?.let { loadRecipesForMenuItem(it) }
+        ioScope.launch {
+            try {
+                val menuItems = menuRepo.getAllMenuItems()
+                val ingredients = inventoryRepo.getAllItems()
+                Platform.runLater {
+                    menuItemCombo.items.setAll(menuItems)
+                    ingredientCombo.items.setAll(ingredients)
+                    if (menuItems.isNotEmpty()) menuItemCombo.selectionModel.selectFirst()
+                }
+            } catch (e: Exception) {
+                Logger.logError(e, "Could not load recipe choices")
+                Platform.runLater { showAlert("Recipes unavailable", "Could not load recipe choices: ${e.message}") }
+            }
         }
 
         recipeTable.selectionModel.selectedItemProperty().addListener { _, _, newSelection ->
@@ -98,31 +119,37 @@ class RecipeController {
 
 
     private fun loadRecipesForMenuItem(menuItemId: Int) {
+        val version = ++recipeLoadVersion
         recipeRows.clear()
-        val recipes = recipeRepo.getRecipesForMenuItem(menuItemId)
-        val allIngredients = inventoryRepo.getAllItems()
-        recipes.forEach { recipe ->
-            val ingredient = allIngredients.find { it.id == recipe.ingredientId }
-            if (ingredient != null) {
-                recipeRows.add(
-                    RecipeRow(
-                        id = recipe.id,   // ✅ now real recipe id
-                        ingredientId = ingredient.id,
-                        ingredientName = ingredient.name,
-                        unit = ingredient.unit,
-                        quantityNeeded = recipe.quantityNeeded
-                    )
-                )
+        recipeLoadJob?.cancel()
+        val ingredientsById = ingredientCombo.items.associateBy { it.id }
+        recipeLoadJob = ioScope.launch {
+            try {
+                val rows = recipeRepo.getRecipesForMenuItem(menuItemId).mapNotNull { recipe ->
+                    val ingredient = ingredientsById[recipe.ingredientId] ?: return@mapNotNull null
+                    RecipeRow(recipe.id, ingredient.id, ingredient.name, ingredient.unit, recipe.quantityNeeded)
+                }
+                Platform.runLater {
+                    if (version == recipeLoadVersion && menuItemCombo.value?.id == menuItemId) recipeRows.setAll(rows)
+                }
+            } catch (e: Exception) {
+                Logger.logError(e, "Could not load recipes")
             }
         }
     }
 
+    override fun dispose() = ioScope.cancel()
+
 
     @FXML
     fun handleAddRecipe() {
-        val menuItem = menuItemCombo.value ?: return
-        val ingredient = ingredientCombo.value ?: return
-        val qty = quantityField.text.toDoubleOrNull() ?: return
+        val menuItem = menuItemCombo.value
+        val ingredient = ingredientCombo.value
+        val qty = quantityField.text.toDoubleOrNull()
+        if (menuItem == null || ingredient == null || qty == null || qty <= 0) {
+            showAlert("Incomplete recipe", "Choose a menu item and ingredient, then enter a quantity greater than zero.")
+            return
+        }
 
         // ✅ Prevent duplicate ingredient for same menu item
         if (recipeRows.any { it.ingredientId == ingredient.id }) {
@@ -130,24 +157,23 @@ class RecipeController {
             return
         }
 
-        recipeRepo.addRecipe(
-            RecipeItem(
-                menuItemId = menuItem.id ?: 0,
-                ingredientId = ingredient.id,
-                quantityNeeded = qty
-            )
-        )
-
-        loadRecipesForMenuItem(menuItem.id ?: 0)
-        quantityField.clear()
+        val recipe = RecipeItem(menuItemId = menuItem.id ?: 0, ingredientId = ingredient.id, quantityNeeded = qty)
+        saveRecipeChange(menuItem.id ?: 0) { recipeRepo.addRecipe(recipe) }
     }
 
     @FXML
     fun handleEditRecipe() {
-        val selected = recipeTable.selectionModel.selectedItem ?: return
-        val ingredient = ingredientCombo.value ?: return
-        val qty = quantityField.text.toDoubleOrNull() ?: return
-        val menuItem = menuItemCombo.value ?: return
+        val selected = recipeTable.selectionModel.selectedItem ?: run {
+            showAlert("No recipe selected", "Select a recipe row to update.")
+            return
+        }
+        val ingredient = ingredientCombo.value
+        val qty = quantityField.text.toDoubleOrNull()
+        val menuItem = menuItemCombo.value
+        if (ingredient == null || menuItem == null || qty == null || qty <= 0) {
+            showAlert("Invalid recipe", "Choose an ingredient and enter a quantity greater than zero.")
+            return
+        }
 
         // Prevent duplicate ingredient for same menu item (except same row being edited)
         if (recipeRows.any { it.ingredientId == ingredient.id && it.id != selected.id }) {
@@ -155,24 +181,17 @@ class RecipeController {
             return
         }
 
-        recipeRepo.updateRecipe(
-            RecipeItem(
-                id = selected.id,
-                menuItemId = menuItem.id ?: 0,
-                ingredientId = ingredient.id,
-                quantityNeeded = qty
-            )
-        )
-
-        loadRecipesForMenuItem(menuItem.id ?: 0)
-        quantityField.clear()
-        ingredientCombo.selectionModel.clearSelection()
+        val recipe = RecipeItem(id = selected.id, menuItemId = menuItem.id ?: 0, ingredientId = ingredient.id, quantityNeeded = qty)
+        saveRecipeChange(menuItem.id ?: 0) { recipeRepo.updateRecipe(recipe) }
     }
 
 
     @FXML
     fun handleDeleteRecipe() {
-        val selected = recipeTable.selectionModel.selectedItem ?: return
+        val selected = recipeTable.selectionModel.selectedItem ?: run {
+            showAlert("No recipe selected", "Select a recipe row to delete.")
+            return
+        }
 
         val alert = Alert(Alert.AlertType.CONFIRMATION)
         alert.title = "Delete Recipe"
@@ -198,12 +217,41 @@ class RecipeController {
 
         val result = alert.showAndWait()
         if (result.isPresent && result.get() == ButtonType.OK) {
-            recipeRepo.deleteRecipe(selected.id)
-            menuItemCombo.value?.id?.let { loadRecipesForMenuItem(it) }
+            val menuItemId = menuItemCombo.value?.id ?: return
+            saveRecipeChange(menuItemId) { recipeRepo.deleteRecipe(selected.id) }
+        }
+    }
 
-            // Clear fields after delete
-            quantityField.clear()
-            ingredientCombo.selectionModel.clearSelection()
+    private fun saveRecipeChange(menuItemId: Int, change: () -> Unit) {
+        if (saving) return
+        saving = true
+        recipeTable.isDisable = true
+        menuItemCombo.isDisable = true
+        val version = ++recipeLoadVersion
+        recipeLoadJob?.cancel()
+        val ingredientsById = ingredientCombo.items.associateBy { it.id }
+        ioScope.launch {
+            try {
+                change()
+                val rows = recipeRepo.getRecipesForMenuItem(menuItemId).mapNotNull { recipe ->
+                    val ingredient = ingredientsById[recipe.ingredientId] ?: return@mapNotNull null
+                    RecipeRow(recipe.id, ingredient.id, ingredient.name, ingredient.unit, recipe.quantityNeeded)
+                }
+                Platform.runLater {
+                    if (version == recipeLoadVersion && menuItemCombo.value?.id == menuItemId) recipeRows.setAll(rows)
+                    quantityField.clear()
+                    ingredientCombo.selectionModel.clearSelection()
+                }
+            } catch (e: Exception) {
+                Logger.logError(e, "Could not save recipe")
+                Platform.runLater { showAlert("Recipe change failed", e.message ?: "The recipe change could not be saved.") }
+            } finally {
+                Platform.runLater {
+                    saving = false
+                    recipeTable.isDisable = false
+                    menuItemCombo.isDisable = false
+                }
+            }
         }
     }
 

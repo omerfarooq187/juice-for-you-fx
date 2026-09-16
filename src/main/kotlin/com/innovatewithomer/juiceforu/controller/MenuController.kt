@@ -2,13 +2,21 @@ package com.innovatewithomer.juiceforu.controller
 
 import com.innovatewithomer.juiceforu.models.MenuItem
 import com.innovatewithomer.juiceforu.repo.MenuItemRepository
+import com.innovatewithomer.juiceforu.utils.DisposableController
+import com.innovatewithomer.juiceforu.utils.Logger
+import javafx.application.Platform
 import javafx.collections.FXCollections
 import javafx.fxml.FXML
 import javafx.scene.control.*
 import javafx.scene.layout.GridPane
 import javafx.scene.layout.HBox
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 
-class MenuController {
+class MenuController : DisposableController {
 
     @FXML private lateinit var menuTable: TableView<MenuItem>
     @FXML private lateinit var colId: TableColumn<MenuItem, Int>
@@ -23,6 +31,9 @@ class MenuController {
     @FXML private lateinit var txtPrice: TextField
 
     private val menuItems = FXCollections.observableArrayList<MenuItem>()
+    private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var loadVersion = 0
+    private var saving = false
 
     @FXML private lateinit var colActions: TableColumn<MenuItem, Void>
 
@@ -38,7 +49,7 @@ class MenuController {
         // ✅ add Edit/Delete buttons
         addActionButtons()
 
-        // load data
+        menuTable.items = menuItems
         refreshTable()
     }
 
@@ -52,50 +63,23 @@ class MenuController {
                     styleClass.add("button-delete")
                 }
 
-                val editBtn = Button("Edit").apply {
-                    setOnAction {
-                        val item = tableRow.item
-                        if (item != null) {
-                            val dialog = TextInputDialog(item.name).apply {
-                                title = "Edit Menu Item"
-                                headerText = "Edit details for ${item.name}"
-                                contentText = "Enter new name:"
-                            }
-
-                            val newName = dialog.showAndWait()
-                            if (newName.isPresent && newName.get().isNotBlank()) {
-                                // update item fields (for now only name, but you can extend for all fields)
-                                val updatedItem = item.copy(name = newName.get())
-
-                                // save to DB
-                                MenuItemRepository.updateMenuItem(updatedItem)
-
-                                // refresh UI
-                                refreshTable()
-                            }
-                        }
-                    }
+                private val actionBox = HBox(8.0, btnEdit, btnDelete).apply {
+                    style = "-fx-alignment: CENTER_LEFT;"
                 }
-
-
                 init {
                     btnEdit.setOnAction {
-                        val item = tableView.items[index]
+                        val item = tableRow.item ?: return@setOnAction
                         onEditItem(item)
                     }
                     btnDelete.setOnAction {
-                        val item = tableView.items[index]
+                        val item = tableRow.item ?: return@setOnAction
                         onDeleteItem(item)
                     }
-
-                    val pane = HBox(10.0, btnEdit, btnDelete)
-                    pane.style = "-fx-alignment: CENTER;"
-                    graphic = pane
                 }
 
                 override fun updateItem(item: Void?, empty: Boolean) {
                     super.updateItem(item, empty)
-                    graphic = if (empty) null else graphic
+                    graphic = if (empty) null else actionBox
                 }
             }
         }
@@ -131,20 +115,18 @@ class MenuController {
 
         dialog.setResultConverter { button ->
             if (button == ButtonType.OK) {
-                val price = priceField.text.toDoubleOrNull() ?: item.price
-                item.copy(
-                    category = categoryField.text,
-                    name = nameField.text,
-                    size = sizeField.text,
-                    price = price
-                )
+                val category = categoryField.text.trim()
+                val name = nameField.text.trim()
+                val size = sizeField.text.trim()
+                val price = priceField.text.toDoubleOrNull()
+                if (category.isBlank() || name.isBlank() || size.isBlank() || price == null || price <= 0) null
+                else item.copy(category = category, name = name, size = size, price = price)
             } else null
         }
 
         val result = dialog.showAndWait()
         if (result.isPresent) {
-            MenuItemRepository.updateMenuItem(result.get())
-            refreshTable()
+            saveMenuChange { MenuItemRepository.updateMenuItem(result.get()) }
         }
     }
 
@@ -158,8 +140,7 @@ class MenuController {
 
         val result = confirm.showAndWait()
         if (result.isPresent && result.get() == ButtonType.OK) {
-            MenuItemRepository.deleteMenuItem(item.id!!)
-            refreshTable()
+            saveMenuChange("Item is in use") { MenuItemRepository.deleteMenuItem(item.id ?: return@saveMenuChange) }
         }
     }
 
@@ -177,8 +158,13 @@ class MenuController {
         }
 
         val price = priceText.toDoubleOrNull()
-        if (price == null) {
-            showAlert("Error", "Price must be a number.")
+        if (price == null || price <= 0) {
+            showAlert("Invalid price", "Price must be a number greater than zero.")
+            return
+        }
+
+        if (menuItems.any { it.category.equals(category, true) && it.name.equals(name, true) && it.size.equals(size, true) }) {
+            showAlert("Duplicate item", "That menu item and size already exist.")
             return
         }
 
@@ -190,24 +176,58 @@ class MenuController {
             price = price
         )
 
-        // insert into DB
-        MenuItemRepository.addMenuItem(newItem)
-
-        // ✅ refresh table
-        refreshTable()
-
-        // clear fields
-        txtCategory.clear()
-        txtName.clear()
-        txtSize.clear()
-        txtPrice.clear()
+        saveMenuChange(onSuccess = {
+            txtCategory.clear()
+            txtName.clear()
+            txtSize.clear()
+            txtPrice.clear()
+        }) { MenuItemRepository.addMenuItem(newItem) }
     }
 
     private fun refreshTable() {
-        menuItems.setAll(MenuItemRepository.getAllMenuItems())
-        menuTable.items = menuItems
-        addActionButtons()
+        val version = ++loadVersion
+        ioScope.launch {
+            try {
+                val items = MenuItemRepository.getAllMenuItems()
+                Platform.runLater { if (version == loadVersion) menuItems.setAll(items) }
+            } catch (e: Exception) {
+                Logger.logError(e, "Could not load menu items")
+                Platform.runLater { showAlert("Menu unavailable", "Could not load menu items: ${e.message}") }
+            }
+        }
     }
+
+    private fun saveMenuChange(errorTitle: String = "Menu change failed", onSuccess: () -> Unit = {}, change: () -> Unit) {
+        if (saving) return
+        saving = true
+        menuTable.isDisable = true
+        ++loadVersion
+        ioScope.launch {
+            try {
+                change()
+                val items = MenuItemRepository.getAllMenuItems()
+                Platform.runLater {
+                    menuItems.setAll(items)
+                    onSuccess()
+                }
+            } catch (e: Exception) {
+                Logger.logError(e, "Could not save menu change")
+                Platform.runLater {
+                    val message = if (errorTitle == "Item is in use")
+                        "This item is linked to an order or recipe and cannot be deleted yet."
+                    else e.message ?: "The menu change could not be saved."
+                    showAlert(errorTitle, message)
+                }
+            } finally {
+                Platform.runLater {
+                    saving = false
+                    menuTable.isDisable = false
+                }
+            }
+        }
+    }
+
+    override fun dispose() = ioScope.cancel()
 
     private fun showAlert(title: String, message: String) {
         val alert = Alert(Alert.AlertType.ERROR)

@@ -50,7 +50,7 @@ object DashboardRepository {
     // 🟢 Top selling items (limit 5)
     fun getTopSellingItems(limit: Int = 5): List<Pair<String, Int>> {
         val sql = """
-            SELECT item_name, COUNT(*) AS count
+            SELECT item_name, SUM(quantity) AS count
             FROM order_items
             GROUP BY item_name
             ORDER BY count DESC

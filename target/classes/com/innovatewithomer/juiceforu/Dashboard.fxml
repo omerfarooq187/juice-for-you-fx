@@ -1,71 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
-
-<?import javafx.scene.chart.PieChart?>
-<?import javafx.scene.control.Label?>
-<?import javafx.scene.control.TableColumn?>
-<?import javafx.scene.control.TableView?>
-<?import javafx.scene.layout.*?>
-
-<BorderPane xmlns="http://javafx.com/javafx/21"
-            xmlns:fx="http://javafx.com/fxml"
-            fx:controller="com.innovatewithomer.juiceforu.controller.DashboardController"
-            stylesheets="@./styles/style.css"
-            styleClass="root">
-
-    <!-- 🔹 Header Bar -->
-    <top>
-        <HBox alignment="CENTER_LEFT" spacing="10" styleClass="header-bar">
-            <Label text="📊 Dashboard Overview" style="-fx-font-size: 22px; -fx-font-weight: bold;" />
-        </HBox>
-    </top>
-
-    <!-- 🔹 Main Content -->
-    <center>
-        <VBox spacing="25" styleClass="content-area">
-            <!-- 🔸 Metric Cards Row -->
-            <HBox spacing="20" alignment="CENTER">
-                <!-- 💰 Sales Card -->
-                <VBox spacing="5" alignment="CENTER" styleClass="metric-card" prefWidth="220" prefHeight="110">
-                    <Label text="💰 Today's Sales" styleClass="metric-title"/>
-                    <Label fx:id="salesLabel" text="Rs. 0" styleClass="metric-value-success"/>
-                    <Label text="↑ 12% vs Yesterday" styleClass="metric-sub"/>
-                </VBox>
-
-                <!-- 🛒 Orders Card -->
-                <VBox spacing="5" alignment="CENTER" styleClass="metric-card" prefWidth="220" prefHeight="110">
-                    <Label text="🛒 Today's Orders" styleClass="metric-title"/>
-                    <Label fx:id="ordersLabel" text="0" styleClass="metric-value-info"/>
-                    <Label text="↗ Steady Flow" styleClass="metric-sub"/>
-                </VBox>
-
-                <!-- ⭐ Avg Order Value -->
-                <VBox spacing="5" alignment="CENTER" styleClass="metric-card" prefWidth="220" prefHeight="110">
-                    <Label text="⭐ Avg. Order Value" styleClass="metric-title"/>
-                    <Label fx:id="avgOrderLabel" text="Rs. 0" styleClass="metric-value"/>
-                    <Label text="Based on today's data" styleClass="metric-sub"/>
-                </VBox>
-            </HBox>
-
-            <!-- 🔸 Content Row -->
-            <HBox spacing="30" alignment="TOP_CENTER">
-                <!-- Left: Chart -->
-                <VBox spacing="10" styleClass="card" prefWidth="380" prefHeight="420">
-                    <Label text="📈 Top Selling Items" styleClass="card-title"/>
-                    <PieChart fx:id="topItemsChart" prefWidth="340" prefHeight="320"/>
-                </VBox>
-
-                <!-- Right: Recent Orders -->
-                <VBox spacing="10" styleClass="card" prefWidth="560">
-                    <Label text="🧾 Recent Orders" styleClass="card-title"/>
-                    <TableView fx:id="recentOrdersTable" styleClass="material-table" prefHeight="380">
-                        <columns>
-                            <TableColumn fx:id="orderIdCol" text="Order ID" prefWidth="140"/>
-                            <TableColumn fx:id="totalCol" text="Total (Rs.)" prefWidth="180"/>
-                            <TableColumn fx:id="createdAtCol" text="Date &amp; Time" prefWidth="220"/>
-                        </columns>
-                    </TableView>
-                </VBox>
-            </HBox>
-        </VBox>
-    </center>
-</BorderPane>
+<?import javafx.scene.chart.PieChart?><?import javafx.scene.control.*?><?import javafx.scene.layout.*?>
+<ScrollPane fitToWidth="true" fitToHeight="true" hbarPolicy="AS_NEEDED" vbarPolicy="AS_NEEDED"
+            xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1"
+            stylesheets="@./styles/style.css" fx:controller="com.innovatewithomer.juiceforu.controller.DashboardController">
+<VBox spacing="18" styleClass="page">
+    <VBox spacing="3" styleClass="page-header"><Label text="Today at a glance" styleClass="section-title"/><Label text="Live sales performance and the latest activity from your counter." styleClass="page-subtitle"/></VBox>
+    <HBox spacing="16">
+        <VBox HBox.hgrow="ALWAYS" spacing="6" styleClass="metric-card"><HBox alignment="CENTER_LEFT" spacing="9"><Label text="↗" styleClass="metric-icon"/><Label text="Today's sales" styleClass="metric-title"/></HBox><Label fx:id="salesLabel" text="Rs. 0" styleClass="metric-value-success"/><Label text="Recorded since midnight" styleClass="metric-sub"/></VBox>
+        <VBox HBox.hgrow="ALWAYS" spacing="6" styleClass="metric-card"><HBox alignment="CENTER_LEFT" spacing="9"><Label text="▤" styleClass="metric-icon"/><Label text="Today's orders" styleClass="metric-title"/></HBox><Label fx:id="ordersLabel" text="0" styleClass="metric-value-info"/><Label text="Completed and open orders" styleClass="metric-sub"/></VBox>
+        <VBox HBox.hgrow="ALWAYS" spacing="6" styleClass="metric-card"><HBox alignment="CENTER_LEFT" spacing="9"><Label text="◎" styleClass="metric-icon"/><Label text="Average order" styleClass="metric-title"/></HBox><Label fx:id="avgOrderLabel" text="Rs. 0" styleClass="metric-value"/><Label text="Based on today's sales" styleClass="metric-sub"/></VBox>
+    </HBox>
+    <HBox VBox.vgrow="ALWAYS" spacing="16">
+        <VBox HBox.hgrow="ALWAYS" spacing="6" styleClass="card"><Label text="Top-selling items" styleClass="card-title"/><Label text="Share of items sold today" styleClass="helper-text"/><PieChart fx:id="topItemsChart" VBox.vgrow="ALWAYS" legendVisible="true"/></VBox>
+        <VBox HBox.hgrow="ALWAYS" spacing="6" styleClass="card"><Label text="Recent orders" styleClass="card-title"/><Label text="Your five latest transactions" styleClass="helper-text"/><TableView fx:id="recentOrdersTable" VBox.vgrow="ALWAYS"><placeholder><Label text="No orders yet"/></placeholder><columns><TableColumn fx:id="orderIdCol" text="ORDER" prefWidth="110"/><TableColumn fx:id="totalCol" text="TOTAL (RS.)" prefWidth="140"/><TableColumn fx:id="createdAtCol" text="DATE &amp; TIME" prefWidth="220"/></columns></TableView></VBox>
+    </HBox>
+</VBox>
+</ScrollPane>

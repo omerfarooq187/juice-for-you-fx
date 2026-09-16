@@ -6,7 +6,6 @@ import com.github.anastaciocintra.escpos.image.CoffeeImageImpl
 import com.github.anastaciocintra.escpos.image.EscPosImage
 import com.github.anastaciocintra.escpos.image.BitImageWrapper
 import com.github.anastaciocintra.escpos.image.BitonalOrderedDither
-import com.github.anastaciocintra.escpos.image.BitonalThreshold
 import com.github.anastaciocintra.output.PrinterOutputStream
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
@@ -17,21 +16,20 @@ import javax.imageio.ImageIO
 import com.innovatewithomer.juiceforu.models.Order
 import com.innovatewithomer.juiceforu.models.OrderItem
 import java.awt.Color
+import javax.print.PrintService
 
 class ReceiptPrinter {
 
     private val lineWidth = 48
     private val charset = Charset.forName("CP437")
 
-    fun buildReceiptContent(order: Order): ByteArray {
-        val sdfDate = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
-        val sdfTime = SimpleDateFormat("HH:mm", Locale.getDefault())
+    fun buildReceiptContent(order: Order, isOldOrder: Boolean = false): ByteArray {
+        val sdfDateTime = SimpleDateFormat("dd/MM/yyyy hh:mm a", Locale.getDefault())
 
         val initialize = byteArrayOf(0x1B, 0x40)
         val boldOn = byteArrayOf(0x1B, 0x45, 0x01)
         val boldOff = byteArrayOf(0x1B, 0x45, 0x00)
         val doubleHeightOn = byteArrayOf(0x1B, 0x21, 0x10)
-        val doubleWidthOn = byteArrayOf(0x1B, 0x21, 0x20)
         val normalText = byteArrayOf(0x1B, 0x21, 0x00)
         val centerAlign = byteArrayOf(0x1B, 0x61, 0x01)
         val leftAlign = byteArrayOf(0x1B, 0x61, 0x00)
@@ -46,84 +44,82 @@ class ReceiptPrinter {
 
             // --- HEADER ---
             write(centerAlign)
-            write(doubleWidthOn)
+            write(doubleHeightOn)
             write(boldOn)
-            write("KITCHEN - ${order.orderType}\n".toByteArray(charset))
+            write("JUICE FOR U\n".toByteArray(charset))
             write(normalText)
             write(boldOff)
+
+            if (isOldOrder) {
+                write(boldOn)
+                write("** DUPLICATE / EDITED ORDER **\n".toByteArray(charset))
+                write(boldOff)
+            }
             write("\n".toByteArray(charset))
 
-            // --- ORDER INFO ---
+            // --- CONTACT INFO ---
             write(leftAlign)
-            write("Order No: ${order.orderNo}\n".toByteArray(charset))
-            write("Date: ${sdfDate.format(Date())}\n".toByteArray(charset))
-            write("Time: ${sdfTime.format(Date())}\n".toByteArray(charset))
+            write("Juice For U Near Thandi Sarak\nG.T Road Mandra\n".toByteArray(charset))
+            write("Tel: 051-3591155  WhatsApp: 0309-5107000\n".toByteArray(charset))
+            write("${"=".repeat(lineWidth)}\n".toByteArray(charset))
+            write("ORDER NO: #${order.orderNo}\n".toByteArray(charset))
+            write("ORDER TIME: ${sdfDateTime.format(Date(if (order.createdAt > 0) order.createdAt else System.currentTimeMillis()))}\n".toByteArray(charset))
+            write("ORDER TYPE: ${order.orderType.uppercase()}\n".toByteArray(charset))
 
-            // 🟢 Delivery address printed right below time
             if (order.orderType.equals("delivery", ignoreCase = true)) {
                 order.customerAddress?.takeIf { it.isNotBlank() && it.lowercase() != "null" }?.let {
-                    write("Delivery Address: ${it.uppercase()}\n".toByteArray(charset))
+                    write("DELIVERY ADDRESS: ${it.uppercase()}\n".toByteArray(charset))
+                }
+                order.customerPhone?.takeIf { it.isNotBlank() }?.let {
+                    write("PHONE NUMBER: $it\n".toByteArray(charset))
                 }
             }
 
             write("${"-".repeat(lineWidth)}\n".toByteArray(charset))
 
-            // --- TABLE HEADER ---
+            // --- ITEMS TABLE HEADER ---
             write(boldOn)
-            val headerFormat = "%-${colItemWidth}s %-${colQtyWidth}s %${colPriceWidth}s\n"
+            val headerFormat = "%-${colItemWidth}s %${colQtyWidth}s %${colPriceWidth}s\n"
             write(headerFormat.format("ITEM", "QTY", "PRICE").toByteArray(charset))
             write("${"-".repeat(lineWidth)}\n".toByteArray(charset))
             write(boldOff)
 
             // --- ITEMS ---
+            var calculatedSubtotal = 0.0
             order.items.forEach { item: OrderItem ->
                 val name = "${item.itemName.uppercase()} (${item.size.uppercase()})".take(colItemWidth)
                 val qty = "x${item.quantity}".take(colQtyWidth)
-                val price = String.format("%.2f", item.price * item.quantity)
+                val price = item.price * item.quantity
+                calculatedSubtotal += price
 
-                val lineFormat = "%-${colItemWidth}s %-${colQtyWidth}s %${colPriceWidth}s\n"
-                val line = lineFormat.format(name, qty, price)
-                write(line.toByteArray(charset))
+                val formattedPrice = "Rs.${"%,.2f".format(price)}"
+                val lineFormat = "%-${colItemWidth}s %${colQtyWidth}s %${colPriceWidth}s\n"
+                write(lineFormat.format(name, qty, formattedPrice).toByteArray(charset))
             }
 
-            // --- TOTAL SECTION ---
+            // --- TOTALS ---
             write("${"-".repeat(lineWidth)}\n".toByteArray(charset))
             write(boldOn)
 
-            val totalQty = order.items.sumOf { it.quantity }
-            val totalAmount = order.items.sumOf { it.price * it.quantity }
-
-            // 🟢 Total line
-            val totalLine = String.format(
-                "%-${colItemWidth}s %-${colQtyWidth}s %${colPriceWidth}.2f\n",
-                "TOTAL:",
-                "x$totalQty",
-                totalAmount
-            )
-            write(totalLine.toByteArray(charset))
-
-            // 🟢 Delivery Charges below total
-            if (order.deliveryCharges > 0) {
-                val deliveryChargesLine = String.format(
-                    "%-${colItemWidth}s %-${colQtyWidth}s %${colPriceWidth}.2f\n",
-                    "DELIVERY CHARGES:",
-                    "",
-                    order.deliveryCharges.toDouble()
-                )
-                write(deliveryChargesLine.toByteArray(charset))
+            fun writeTotalLine(label: String, amount: String) {
+                val line = "%-${colItemWidth}s %${colQtyWidth}s %${colPriceWidth}s\n"
+                    .format(label, "", amount)
+                write(line.toByteArray(charset))
             }
 
-            // 🟢 Grand total (if delivery charges exist)
-            if (order.deliveryCharges > 0) {
-                val grandTotal = totalAmount + order.deliveryCharges
-                val grandTotalLine = String.format(
-                    "%-${colItemWidth}s %-${colQtyWidth}s %${colPriceWidth}.2f\n",
-                    "GRAND TOTAL:",
-                    "",
-                    grandTotal
-                )
-                write(grandTotalLine.toByteArray(charset))
+            writeTotalLine("SUBTOTAL:", "Rs.${"%,.2f".format(calculatedSubtotal)}")
+
+            if (order.serviceCharges > 0) {
+                writeTotalLine("SERVICE CHARGES:", "Rs.${"%,.2f".format(order.serviceCharges.toDouble())}")
             }
+            if (order.deliveryCharges > 0) {
+                writeTotalLine("DELIVERY CHARGES:", "Rs.${"%,.2f".format(order.deliveryCharges.toDouble())}")
+            }
+            if (order.discountPercent > 0) {
+                writeTotalLine("DISCOUNT (${order.discountPercent.toInt()}%):", "-Rs.${"%,.2f".format(order.discountAmount)}")
+            }
+
+            writeTotalLine("TOTAL AMOUNT:", "Rs.${"%,d".format(order.total)}")
 
             write(boldOff)
             write("${"=".repeat(lineWidth)}\n".toByteArray(charset))
@@ -131,74 +127,68 @@ class ReceiptPrinter {
             // --- FOOTER ---
             write(centerAlign)
             write(boldOn)
-            write("THANK YOU!\n\n\n".toByteArray(charset))
+            write("THANKS FOR CHOOSING JUICE FOR U\n\n".toByteArray(charset))
+            write("YOUR SATISFACTION IS OUR PLEASURE\n".toByteArray(charset))
+            write("PLEASE VISIT US AGAIN!\n\n".toByteArray(charset))
             write(boldOff)
             write(cutPaper)
 
         }.toByteArray()
     }
 
-    fun printReceipt(printerName: String, order: Order, isOldOrder: Boolean) {
+    fun printReceipt(printerName: String, order: Order, isOldOrder: Boolean = false) {
         var escpos: EscPos? = null
         var outputStream: PrinterOutputStream? = null
 
         try {
-            val printServices = PrinterOutputStream.getListPrintServicesNames()
-            if (!printServices.contains(printerName)) {
-                throw IllegalArgumentException("Printer '$printerName' not found. Available printers: ${printServices.joinToString()}")
-            }
+            val printService: PrintService = PrinterOutputStream.getPrintServiceByName(printerName)
+                ?: throw IllegalStateException("Printer service '$printerName' not found.")
 
-            val printService = PrinterOutputStream.getPrintServiceByName(printerName)
             outputStream = PrinterOutputStream(printService)
             escpos = EscPos(outputStream)
 
-            // --- HEADER RECEIPT INFO ---
-            outputStream.write(byteArrayOf(0x1B, 0x40)) // initialize
-            outputStream.write(byteArrayOf(0x1B, 0x21, 0x30)) // double size
-            outputStream.write(byteArrayOf(0x1B, 0x45, 0x01)) // bold
-            outputStream.write("Receipt ID: ${order.orderNo}\n".toByteArray(charset))
-
-            if (isOldOrder) {
-                outputStream.write("OLD ORDER\n".toByteArray(charset))
-            }
-
-            outputStream.write(byteArrayOf(0x1B, 0x45, 0x00)) // bold off
-            outputStream.write(byteArrayOf(0x1B, 0x21, 0x00)) // normal size
-            outputStream.write("\n".toByteArray(charset))
-
-            // --- LOGO ---
-            val imageStream = javaClass.getResourceAsStream("/com/innovatewithomer/juiceforu/logo/logo.jpg").use { stream ->
-                val originalImage = ImageIO.read(stream)
-                val targetWidth = 300
-                val targetHeight = (originalImage.height * targetWidth) / originalImage.width
-
-                val resizedImage = BufferedImage(targetWidth, targetHeight, BufferedImage.TYPE_INT_RGB).apply {
-                    createGraphics().run {
-                        drawImage(originalImage, 0, 0, targetWidth, targetHeight, null)
-                        dispose()
+            // --- OPTIONAL LOGO ---
+            try {
+                val imageStream = javaClass.getResourceAsStream("/com/innovatewithomer/juiceforu/logo/logo.jpg")
+                if (imageStream != null) {
+                    imageStream.use { stream ->
+                        val originalImage = ImageIO.read(stream)
+                        if (originalImage != null) {
+                            val targetWidth = 300
+                            val targetHeight = (originalImage.height * targetWidth) / originalImage.width
+                            val resizedImage = BufferedImage(targetWidth, targetHeight, BufferedImage.TYPE_INT_RGB).apply {
+                                createGraphics().run {
+                                    drawImage(originalImage, 0, 0, targetWidth, targetHeight, null)
+                                    dispose()
+                                }
+                            }
+                            val escPosImage = EscPosImage(
+                                CoffeeImageImpl(adjustForThermalPrint(resizedImage)),
+                                BitonalOrderedDither()
+                            )
+                            escpos.write(BitImageWrapper().setJustification(EscPosConst.Justification.Center), escPosImage)
+                            escpos.feed(1)
+                        }
                     }
                 }
-
-                EscPosImage(
-                    CoffeeImageImpl(resizedImage),
-                    BitonalThreshold()
-                )
+            } catch (imgEx: Exception) {
+                Logger.logError(imgEx, "Receipt logo print skipped")
             }
 
-            escpos.write(BitImageWrapper().setJustification(EscPosConst.Justification.Center), imageStream)
-            escpos.feed(2)
-
             // --- MAIN RECEIPT ---
-            outputStream.write(buildReceiptContent(order))
+            val receiptBytes = buildReceiptContent(order, isOldOrder)
+            outputStream.write(receiptBytes)
             outputStream.flush()
-
             escpos.cut(EscPos.CutMode.FULL)
 
         } catch (e: Exception) {
-            e.printStackTrace()
+            Logger.logError(e, "Printing failed for order #${order.orderNo}")
+            throw e
         } finally {
-            escpos?.close()
-            outputStream?.close()
+            try {
+                escpos?.close()
+                outputStream?.close()
+            } catch (_: Exception) {}
         }
     }
 
@@ -216,7 +206,7 @@ class ReceiptPrinter {
                 adjusted.setRGB(x, y, Color(r.toInt(), g.toInt(), b.toInt()).rgb)
             }
         }
-
         return adjusted
     }
 }
+

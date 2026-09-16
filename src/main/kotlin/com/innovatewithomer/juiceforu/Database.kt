@@ -1,184 +1,276 @@
 package com.innovatewithomer.juiceforu
 
+import com.zaxxer.hikari.HikariConfig
+import com.zaxxer.hikari.HikariDataSource
 import java.sql.Connection
-import java.sql.DriverManager
+import java.sql.SQLException
+import java.nio.file.Files
+import java.nio.file.Path
+import javax.sql.DataSource
 
 object Database {
-    private const val DB_URL = "jdbc:sqlite:juiceforyou.db"
+    private var dbUrl: String = "jdbc:sqlite:${AppPaths.databasePath}"
+    @Volatile
+    private var dataSource: HikariDataSource? = null
+    private val lock = Any()
 
-    fun getConnection(): Connection {
-        return DriverManager.getConnection(DB_URL).apply {
-            createStatement().use {
-                it.execute("PRAGMA busy_timeout = 5000;")
-                it.execute("PRAGMA journal_mode = WAL;")
+    /**
+     * Allows configuring a custom DB URL (e.g. for testing environments).
+     */
+    fun configure(url: String) {
+        synchronized(lock) {
+            if (dbUrl != url) {
+                close()
+                dbUrl = url
             }
         }
     }
-}
 
-//object Database {
-//    private const val DB_URL = "jdbc:sqlite:pizza_hut.db"
-//
-//    init {
-////        createTables()
-////        seedMenuItems()
-//    }
-//
-//    private fun createTables() {
-//        connection.use { conn ->
-//            conn.createStatement().use { stmt ->
-//                stmt.executeUpdate(
-//                    """
-//                CREATE TABLE IF NOT EXISTS customers (
-//                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-//                    name TEXT NOT NULL,
-//                    phone TEXT,
-//                    email TEXT,
-//                    type TEXT DEFAULT 'Regular'
-//                )
-//                """
-//                )
-//
-//                stmt.executeUpdate(
-//                    """
-//                        CREATE TABLE IF NOT EXISTS orders (
-//                            id INTEGER PRIMARY KEY AUTOINCREMENT,
-//                            total INTEGER NOT NULL,
-//                            order_type TEXT NOT NULL DEFAULT 'Takeaway',
-//                            delivery_charges REAL DEFAULT 0,
-//                            service_charges REAL DEFAULT 0,
-//                            created_at BIGINT,
-//                            is_edited INTEGER DEFAULT 0,
-//                            address TEXT,
-//                            phone TEXT
-//                        )
-//                        """
-//                )
-//
-//
-//                stmt.executeUpdate(
-//                    """
-//                                CREATE TABLE IF NOT EXISTS order_items (
-//                id INTEGER PRIMARY KEY AUTOINCREMENT,
-//                order_id INTEGER NOT NULL,
-//                menu_item_id INTEGER,                -- ✅ link to menu_items
-//                item_name TEXT NOT NULL,
-//                category TEXT NOT NULL,
-//                size TEXT NOT NULL,
-//                price REAL NOT NULL,
-//                quantity INTEGER NOT NULL DEFAULT 1,
-//                FOREIGN KEY(order_id) REFERENCES orders(id),
-//                FOREIGN KEY(menu_item_id) REFERENCES menu_items(id)
-//            )
-//
-//
-//                    """
-//                )
-//
-//
-//                // ✅ Menu items
-//                stmt.executeUpdate(
-//                    """
-//                CREATE TABLE IF NOT EXISTS menu_items (
-//                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-//                    category TEXT NOT NULL,
-//                    name TEXT NOT NULL,
-//                    size TEXT NOT NULL,
-//                    price REAL NOT NULL
-//                )
-//                """
-//                )
-//
-//                stmt.executeUpdate(
-//                    """
-//                CREATE TABLE IF NOT EXISTS inventory_items (
-//                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-//                    name TEXT NOT NULL,
-//                    unit TEXT NOT NULL,
-//                    quantity REAL NOT NULL,
-//                    reorder_level REAL NOT NULL
-//                )
-//                """
-//                )
-//
-//                stmt.executeUpdate(
-//                    """
-//                CREATE TABLE IF NOT EXISTS recipes (
-//                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-//                    menu_item_id INTEGER NOT NULL,
-//                    ingredient_id INTEGER NOT NULL,
-//                    quantity_needed REAL NOT NULL,
-//                    FOREIGN KEY (menu_item_id) REFERENCES menu_items(id),
-//                    FOREIGN KEY (ingredient_id) REFERENCES inventory_items(id)
-//                )
-//                """
-//                )
-//            }
-//        }
-//    }
-//
-//    private fun seedMenuItems() {
-//        val menuItems = listOf(
-//            // Ice Cream Shakes
-//            arrayOf("Ice Cream Shakes", "Oreo", "R", 490),
-//            arrayOf("Ice Cream Shakes", "Oreo", "L", 550),
-//            arrayOf("Ice Cream Shakes", "Kitkat", "R", 490),
-//            arrayOf("Ice Cream Shakes", "Kitkat", "L", 550),
-//            arrayOf("Ice Cream Shakes", "M&M", "R", 490),
-//            arrayOf("Ice Cream Shakes", "M&M", "L", 550),
-//            arrayOf("Ice Cream Shakes", "Ice Cream", "R", 490),
-//            arrayOf("Ice Cream Shakes", "Ice Cream", "L", 550),
-//            arrayOf("Ice Cream Shakes", "Chocolate", "R", 490),
-//            arrayOf("Ice Cream Shakes", "Chocolate", "L", 550),
-//            // Smoothies
-//            arrayOf("SMOOTHIES", "Apple", "R", 300),
-//            arrayOf("SMOOTHIES", "Apple", "L", 350),
-//            arrayOf("SMOOTHIES", "Banana", "R", 300),
-//            arrayOf("SMOOTHIES", "Banana", "L", 350),
-//            arrayOf("SMOOTHIES", "Strawberry", "R", 350),
-//            arrayOf("SMOOTHIES", "Strawberry", "L", 400),
-//            arrayOf("SMOOTHIES", "Pineapple", "R", 400),
-//            arrayOf("SMOOTHIES", "Pineapple", "L", 450),
-//            arrayOf("SMOOTHIES", "Peach", "R", 350),
-//            arrayOf("SMOOTHIES", "Peach", "L", 400),
-//            // Chats
-//            arrayOf("Chats", "Gol-Gappy", "R", 200),
-//            arrayOf("Chats", "Gol-Gappy", "L", 350),
-//            arrayOf("Chats", "Russian", "R", 300),
-//            arrayOf("Chats", "Russian", "L", 400),
-//            arrayOf("Chats", "Dahi", "L", 250),
-//            arrayOf("Chats", "Chana", "L", 250),
-//            arrayOf("Chats", "Fruit", "L", 350),
-//            arrayOf("Chats", "Flooda", "L", 350),
-//            // Thai and Sweet
-//            arrayOf("Thai and Sweet", "Tea", "-", 120),
-//            arrayOf("Thai and Sweet", "Hot Coffee", "-", 250),
-//            arrayOf("Thai and Sweet", "Kashmiri Tea", "-", 200),
-//            arrayOf("Thai and Sweet", "Black Coffee", "-", 250),
-//            arrayOf("Thai and Sweet", "Cappuccino", "-", 250),
-//            arrayOf("Thai and Sweet", "Cold Coffee", "-", 500),
-//            // ✅ Continue with Fresh Juices, Fresh Limonade, Mix Fruit Juices, Veg Juice & Detox...
-//        )
-//
-//        connection.use { conn ->
-//            // Insert only if table is empty
-//            val rs = conn.createStatement().executeQuery("SELECT COUNT(*) FROM menu_items")
-//            if (rs.next() && rs.getInt(1) == 0) {
-//                val sql = "INSERT INTO menu_items (category, name, size, price) VALUES (?, ?, ?, ?)"
-//                conn.prepareStatement(sql).use { pstmt ->
-//                    for (item in menuItems) {
-//                        pstmt.setString(1, item[0] as String)
-//                        pstmt.setString(2, item[1] as String)
-//                        pstmt.setString(3, item[2] as String)
-//                        pstmt.setDouble(4, (item[3] as Number).toDouble())
-//                        pstmt.addBatch()
-//                    }
-//                    pstmt.executeBatch()
-//                }
-//            }
-//        }
-//    }
-//
-//    val connection: Connection
-//        get() = DriverManager.getConnection(DB_URL)
-//}
+    fun configureDefaultLocation() {
+        val path = AppPaths.prepareDatabase()
+        configure("jdbc:sqlite:${path.toAbsolutePath()}")
+    }
+
+    fun currentPath(): Path? = dbUrl.removePrefix("jdbc:sqlite:")
+        .takeIf { it != dbUrl && it.isNotBlank() }
+        ?.let { Path.of(it).toAbsolutePath().normalize() }
+
+    /**
+     * Initializes the connection pool if not already initialized.
+     */
+    private fun getDataSource(): DataSource {
+        val existing = dataSource
+        if (existing != null && !existing.isClosed) {
+            return existing
+        }
+        return synchronized(lock) {
+            val doubleCheck = dataSource
+            if (doubleCheck != null && !doubleCheck.isClosed) {
+                doubleCheck
+            } else {
+                val config = HikariConfig().apply {
+                    jdbcUrl = dbUrl
+                    driverClassName = "org.sqlite.JDBC"
+                    // SQLite has one writer; a small pool supports concurrent reads
+                    // without creating avoidable write contention.
+                    maximumPoolSize = 4
+                    minimumIdle = 1
+                    idleTimeout = 30000
+                    connectionTimeout = 10000
+                    maxLifetime = 600000
+                    poolName = "JuiceForU-HikariPool"
+                    connectionInitSql = "PRAGMA journal_mode = WAL"
+                    addDataSourceProperty("cachePrepStmts", "true")
+                    addDataSourceProperty("prepStmtCacheSize", "250")
+                    addDataSourceProperty("prepStmtCacheSqlLimit", "2048")
+                }
+                HikariDataSource(config).also { dataSource = it }
+            }
+        }
+    }
+
+    /**
+     * Retrieves a pooled database connection.
+     */
+    fun getConnection(): Connection {
+        val connection = getDataSource().connection
+        try {
+            connection.createStatement().use { statement ->
+                statement.execute("PRAGMA busy_timeout = 5000")
+                statement.execute("PRAGMA foreign_keys = ON")
+                statement.execute("PRAGMA synchronous = NORMAL")
+            }
+            return connection
+        } catch (e: Exception) {
+            connection.close()
+            throw e
+        }
+    }
+
+    /**
+     * Executes a block within an atomic transaction.
+     * Automatically commits upon successful completion or rolls back if an exception occurs.
+     */
+    fun <T> transaction(block: (Connection) -> T): T {
+        getConnection().use { conn ->
+            val initialAutoCommit = conn.autoCommit
+            try {
+                conn.autoCommit = false
+                val result = block(conn)
+                conn.commit()
+                return result
+            } catch (e: Exception) {
+                try {
+                    conn.rollback()
+                } catch (rollbackEx: SQLException) {
+                    e.addSuppressed(rollbackEx)
+                }
+                throw e
+            } finally {
+                try {
+                    conn.autoCommit = initialAutoCommit
+                } catch (_: Exception) {}
+            }
+        }
+    }
+
+    /**
+     * Safe database initialization.
+     * Creates all required tables and indexes if they do not exist.
+     * 100% backward compatible with existing database files.
+     */
+    fun init() {
+        getConnection().use { conn ->
+            conn.createStatement().use { stmt ->
+                // 1. Customers Table
+                stmt.executeUpdate(
+                    """
+                    CREATE TABLE IF NOT EXISTS customers (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        name TEXT NOT NULL,
+                        phone TEXT,
+                        email TEXT,
+                        type TEXT DEFAULT 'Regular'
+                    )
+                    """.trimIndent()
+                )
+
+                // 2. Orders Table
+                stmt.executeUpdate(
+                    """
+                    CREATE TABLE IF NOT EXISTS orders (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        order_no INTEGER DEFAULT 0,
+                        total INTEGER NOT NULL,
+                        order_type TEXT NOT NULL DEFAULT 'Takeaway',
+                        order_status TEXT DEFAULT 'PENDING',
+                        delivery_charges REAL DEFAULT 0,
+                        service_charges REAL DEFAULT 0,
+                        discount_percent REAL DEFAULT 0,
+                        discount_amount REAL DEFAULT 0,
+                        created_at BIGINT,
+                        is_edited INTEGER DEFAULT 0,
+                        address TEXT,
+                        phone TEXT
+                    )
+                    """.trimIndent()
+                )
+
+                // 3. Menu Items Table
+                stmt.executeUpdate(
+                    """
+                    CREATE TABLE IF NOT EXISTS menu_items (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        category TEXT NOT NULL,
+                        name TEXT NOT NULL,
+                        size TEXT NOT NULL,
+                        price REAL NOT NULL
+                    )
+                    """.trimIndent()
+                )
+
+                // 4. Order Items Table
+                stmt.executeUpdate(
+                    """
+                    CREATE TABLE IF NOT EXISTS order_items (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        order_id INTEGER NOT NULL,
+                        menu_item_id INTEGER,
+                        item_name TEXT NOT NULL,
+                        category TEXT NOT NULL,
+                        size TEXT NOT NULL,
+                        price REAL NOT NULL,
+                        quantity INTEGER NOT NULL DEFAULT 1,
+                        FOREIGN KEY(order_id) REFERENCES orders(id) ON DELETE CASCADE,
+                        FOREIGN KEY(menu_item_id) REFERENCES menu_items(id)
+                    )
+                    """.trimIndent()
+                )
+
+                // 5. Inventory Items Table
+                stmt.executeUpdate(
+                    """
+                    CREATE TABLE IF NOT EXISTS inventory_items (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        name TEXT NOT NULL,
+                        unit TEXT NOT NULL,
+                        quantity REAL NOT NULL,
+                        reorder_level REAL NOT NULL
+                    )
+                    """.trimIndent()
+                )
+
+                // 6. Recipes Table
+                stmt.executeUpdate(
+                    """
+                    CREATE TABLE IF NOT EXISTS recipes (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        menu_item_id INTEGER NOT NULL,
+                        ingredient_id INTEGER NOT NULL,
+                        quantity_needed REAL NOT NULL,
+                        FOREIGN KEY (menu_item_id) REFERENCES menu_items(id) ON DELETE CASCADE,
+                        FOREIGN KEY (ingredient_id) REFERENCES inventory_items(id) ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+
+                // 7. Order Number Tracker Table
+                stmt.executeUpdate(
+                    """
+                    CREATE TABLE IF NOT EXISTS order_number_tracker (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        last_reset_date TEXT,
+                        last_order_no INTEGER
+                    )
+                    """.trimIndent()
+                )
+
+                // 8. Performance Indexes (Non-destructive)
+                stmt.executeUpdate("CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at);")
+                stmt.executeUpdate("CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(order_status);")
+                stmt.executeUpdate("CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id);")
+                stmt.executeUpdate("CREATE INDEX IF NOT EXISTS idx_recipes_menu_item_id ON recipes(menu_item_id);")
+                stmt.executeUpdate("CREATE INDEX IF NOT EXISTS idx_menu_items_category ON menu_items(category);")
+            }
+        }
+    }
+
+    /** Creates a transactionally consistent standalone SQLite backup. */
+    fun backupTo(destination: Path) {
+        val normalized = destination.toAbsolutePath().normalize()
+        require(!Files.exists(normalized)) { "Backup destination already exists: $normalized" }
+        Files.createDirectories(normalized.parent)
+        getConnection().use { conn ->
+            conn.createStatement().use { it.execute("PRAGMA wal_checkpoint(PASSIVE)") }
+            conn.prepareStatement("VACUUM INTO ?").use { statement ->
+                statement.setString(1, normalized.toString())
+                statement.execute()
+            }
+        }
+        check(Files.isRegularFile(normalized) && Files.size(normalized) > 0) {
+            "SQLite did not create a valid backup at $normalized"
+        }
+    }
+
+    fun integrityCheck(): String = getConnection().use { conn ->
+        conn.createStatement().use { statement ->
+            statement.executeQuery("PRAGMA integrity_check").use { result ->
+                if (result.next()) result.getString(1) else "No result"
+            }
+        }
+    }
+
+    /**
+     * Closes the connection pool.
+     */
+    fun close() {
+        synchronized(lock) {
+            dataSource?.let {
+                if (!it.isClosed) {
+                    it.close()
+                }
+            }
+            dataSource = null
+        }
+    }
+}

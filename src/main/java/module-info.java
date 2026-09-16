@@ -6,13 +6,9 @@ module com.innovatewithomer.juiceforu {
     requires java.desktop;
     requires kotlin.stdlib;
 
-    requires org.controlsfx.controls;
-    requires com.dlsc.formsfx;
-    requires net.synedra.validatorfx;
-    requires org.kordamp.bootstrapfx.core;
-    requires eu.hansolo.tilesfx;
+    requires com.zaxxer.hikari;
+    requires kotlinx.coroutines.core;
     requires escpos.coffee;
-
     requires atlantafx.base;
 
     opens com.innovatewithomer.juiceforu to javafx.fxml;

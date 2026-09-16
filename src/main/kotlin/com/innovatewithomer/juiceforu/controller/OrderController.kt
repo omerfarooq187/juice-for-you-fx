@@ -1,6 +1,8 @@
 package com.innovatewithomer.juiceforu.controller
 
 import com.innovatewithomer.juiceforu.models.MenuItem
+import com.innovatewithomer.juiceforu.AppSettings
+import com.innovatewithomer.juiceforu.PrinterService
 import com.innovatewithomer.juiceforu.models.Order
 import com.innovatewithomer.juiceforu.models.OrderItem
 import com.innovatewithomer.juiceforu.repo.InventoryRepository
@@ -44,6 +46,7 @@ class OrderController: DisposableController {
     @FXML private lateinit var addressField: TextField
 
     @FXML private lateinit var printReceiptCheck: CheckBox
+    @FXML private lateinit var saveOrderButton: Button
 
     private val orderRepository = OrderRepository()
     private val recipeRepository = RecipeRepository()
@@ -58,21 +61,32 @@ class OrderController: DisposableController {
     private var currentOrder: Order? = null
     private val orderRows = FXCollections.observableArrayList<OrderRow>()
     private lateinit var filteredMenu: FilteredList<MenuItem>
+    private var printerChoiceVersion = 0
 
     @FXML
     fun initialize() {
-
-        var allMenuItems = FXCollections.observableArrayList<MenuItem>()
-
-        try {
-            // --- Load menu items (fast) ---
-            allMenuItems = FXCollections.observableArrayList(MenuItemRepository.getAllMenuItems())
-            filteredMenu = FilteredList(allMenuItems) { true }
-            menuList.items = filteredMenu
-
-
-        } catch (e: Exception) {
-            Logger.logError(e, "Error while loading menu items in OrderController.initialize()")
+        val allMenuItems = FXCollections.observableArrayList<MenuItem>()
+        filteredMenu = FilteredList(allMenuItems) { true }
+        menuList.items = filteredMenu
+        menuList.placeholder = Label("Loading menu…")
+        menuList.isDisable = true
+        categoryFilter.items = FXCollections.observableArrayList("All")
+        categoryFilter.selectionModel.selectFirst()
+        ioScope.launch {
+            try {
+                val items = MenuItemRepository.getAllMenuItems()
+                Platform.runLater {
+                    allMenuItems.setAll(items)
+                    categoryFilter.items.setAll(listOf("All") + items.map { it.category }.distinct())
+                    categoryFilter.selectionModel.selectFirst()
+                    menuList.placeholder = Label("No menu items found")
+                    menuList.isDisable = false
+                    applyMenuFilter()
+                }
+            } catch (e: Exception) {
+                Logger.logError(e, "Error while loading menu items in OrderController.initialize()")
+                Platform.runLater { menuList.placeholder = Label("Could not load menu items") }
+            }
         }
 
         // --- Show preview of next order number safely ---
@@ -93,24 +107,19 @@ class OrderController: DisposableController {
         phoneField.isDisable = true
         addressField.isDisable = true
 
-        // Search filter
-        searchField.textProperty().addListener { _, _, newValue ->
-            filteredMenu.setPredicate { item ->
-                newValue.isNullOrBlank() || item.name.contains(newValue, ignoreCase = true)
-            }
-        }
+        // Search and category filters share one predicate so neither can erase the other.
+        searchField.textProperty().addListener { _, _, _ -> applyMenuFilter() }
         chargesField.textProperty().addListener { _, _, _ -> refreshOrder() }
+        chargesField.textFormatter = TextFormatter<String> { change ->
+            if (change.controlNewText.matches(Regex("\\d{0,7}"))) change else null
+        }
+        phoneField.textFormatter = TextFormatter<String> { change ->
+            if (change.controlNewText.matches(Regex("[+0-9() -]{0,24}"))) change else null
+        }
 
         // Category filter
-        val categories = listOf("All") + allMenuItems.map { it.category }.distinct()
-        categoryFilter.items = FXCollections.observableArrayList(categories)
-        categoryFilter.selectionModel.selectFirst()
         categoryFilter.setOnAction {
-            val selected = categoryFilter.value
-            filteredMenu.setPredicate { item ->
-                (selected == "All" || item.category == selected) &&
-                        (searchField.text.isNullOrBlank() || item.name.contains(searchField.text, ignoreCase = true))
-            }
+            applyMenuFilter()
         }
 
         // When clicking on menu → add to order
@@ -126,7 +135,7 @@ class OrderController: DisposableController {
             val selected = menuList.selectionModel.selectedItem ?: return@setOnMouseClicked
             addItemToOrder(selected)
             searchField.clear()
-            filteredMenu.setPredicate { true }
+            applyMenuFilter()
         }
 
         // Setup order table
@@ -137,9 +146,9 @@ class OrderController: DisposableController {
 
         colActions.setCellFactory {
             object : TableCell<OrderRow, String>() {
-                private val plusBtn = Button("+").apply { styleClass.add("btn-success") }
-                private val minusBtn = Button("-").apply { styleClass.add("btn-success") }
-                private val removeBtn = Button("x").apply { styleClass.add("btn-success") }
+                private val plusBtn = Button("+").apply { styleClass.add("quantity-button") }
+                private val minusBtn = Button("−").apply { styleClass.add("quantity-button") }
+                private val removeBtn = Button("Remove").apply { styleClass.add("btn-danger") }
                 private val box = HBox(5.0, minusBtn, plusBtn, removeBtn)
 
                 init {
@@ -169,6 +178,8 @@ class OrderController: DisposableController {
 
         orderTypeCombo.items = FXCollections.observableArrayList("Service", "Takeaway", "Delivery")
         orderTypeCombo.selectionModel.selectFirst()
+        printReceiptCheck.setOnAction { printerChoiceVersion++ }
+        updateDefaultPrinterSelection()
         orderTypeCombo.valueProperty().addListener { _, _, newValue ->
             when (newValue) {
                 "Delivery" -> {
@@ -203,6 +214,17 @@ class OrderController: DisposableController {
         refreshOrder()
     }
 
+    private fun applyMenuFilter() {
+        if (!::filteredMenu.isInitialized) return
+        val query = searchField.text.orEmpty().trim()
+        val category = categoryFilter.value ?: "All"
+        filteredMenu.setPredicate { item ->
+            (category == "All" || item.category == category) &&
+                (query.isBlank() || item.name.contains(query, ignoreCase = true) ||
+                    item.category.contains(query, ignoreCase = true))
+        }
+    }
+
     private fun refreshOrder() {
         orderTable.refresh()
         val subtotal = orderRows.sumOf { it.totalPrice }
@@ -212,160 +234,128 @@ class OrderController: DisposableController {
             "Service" -> chargesField.text.toIntOrNull() ?: 0
             else -> 0
         }
-        val total = subtotal + extraCharges
+        val beforeDiscount = subtotal + extraCharges
+        val total = (beforeDiscount * (1.0 - (currentOrder?.discountPercent ?: 0.0) / 100.0)).toInt()
         subtotalLabel.text = "Subtotal: Rs. $subtotal"
         totalLabel.text = "Total: Rs. $total"
     }
 
     @FXML
     private fun onSaveOrderClick() {
+        if (orderRows.isEmpty()) {
+            showAlert("No items in order", "Please add at least one item before saving.")
+            return
+        }
+        val orderType = orderTypeCombo.value
+        val charges = chargesField.text.toIntOrNull() ?: 0
+        if (orderType == "Delivery" && (phoneField.text.isNullOrBlank() || addressField.text.isNullOrBlank())) {
+            showAlert("Delivery details required", "Enter both a customer phone number and delivery address.")
+            return
+        }
+        val configuredPrinter = AppSettings.printerName
+        val rowsToSave = orderRows.map { it.copy() }
+        val orderToEdit = currentOrder
+        val printAfterSave = printReceiptCheck.isSelected
+        val chargesAmount = charges
+        val customerPhone = if (orderType == "Delivery") phoneField.text else null
+        val customerAddress = if (orderType == "Delivery") addressField.text else null
+        saveOrderButton.isDisable = true
+        saveOrderButton.text = "Saving…"
         ioScope.launch {
             try {
-                if (orderRows.isEmpty()) {
+                val selectedPrinter = if (printAfterSave) configuredPrinter ?: PrinterService.defaultPrinterName() else null
+                if (printAfterSave && selectedPrinter.isNullOrBlank()) {
                     Platform.runLater {
-                        showAlert("No items in order", "Please add at least one item before saving.")
+                        showAlert("Printer not configured", "Select a receipt printer in Settings, or turn off Print receipt for this order.")
                     }
                     return@launch
                 }
+                val deliveryCharges = if (orderType == "Delivery") chargesAmount else 0
+                val serviceCharges = if (orderType == "Service") chargesAmount else 0
 
-                val orderType = orderTypeCombo.value
-                val deliveryCharges = if (orderType == "Delivery") chargesField.text.toIntOrNull() ?: 0 else 0
-                val serviceCharges = if (orderType == "Service") chargesField.text.toIntOrNull() ?: 0 else 0
-                val customerPhone = if (orderType == "Delivery") phoneField.text else null
-                val customerAddress = if (orderType == "Delivery") addressField.text else null
-
-                val subtotal = orderRows.sumOf { it.totalPrice }
-                val total = subtotal + deliveryCharges + serviceCharges
+                val subtotal = rowsToSave.sumOf { it.totalPrice }
+                val beforeDiscount = subtotal + deliveryCharges + serviceCharges
+                val discountPercent = orderToEdit?.discountPercent ?: 0.0
+                val discountAmount = beforeDiscount * discountPercent / 100.0
+                val total = (beforeDiscount - discountAmount).toInt()
 
                 var savedOrder: Order? = null
                 var isOldOrder = false
 
-                withContext(Dispatchers.IO) {
-                    try {
-                        if (currentOrder != null) {
-                            val updatedOrder = currentOrder!!.copy(
-                                total = total,
-                                orderType = orderType,
-                                deliveryCharges = deliveryCharges,
-                                serviceCharges = serviceCharges,
-                                isEdited = true,
-                                customerPhone = customerPhone,
-                                customerAddress = customerAddress
-                            )
+                // Prepare items
+                val items = rowsToSave.map {
+                    OrderItem(
+                        id = 0,
+                        orderId = orderToEdit?.id ?: 0,
+                        menuItemId = it.menuItem.id ?: 0,
+                        itemName = it.menuItem.name,
+                        category = it.menuItem.category,
+                        size = it.menuItem.size,
+                        price = it.menuItem.price,
+                        quantity = it.quantity
+                    )
+                }
 
-
-                            // Restore inventory for previous items
-                            currentOrder!!.items.forEach { oldItem ->
-                                val recipes = recipeRepository.getRecipesForMenuItem(oldItem.menuItemId)
-                                recipes.forEach { recipe ->
-                                    val qtyToRestore = recipe.quantityNeeded * oldItem.quantity
-                                    inventoryRepo.adjustStock(recipe.ingredientId, qtyToRestore)
-                                }
-                            }
-
-                            orderRepository.updateOrder(updatedOrder)
-                            orderRepository.deleteOrderItems(updatedOrder.id)
-
-                            val items = orderRows.map {
-                                OrderItem(
-                                    id = 0,
-                                    orderId = updatedOrder.id,
-                                    menuItemId = it.menuItem.id ?: 0,
-                                    itemName = it.menuItem.name,
-                                    category = it.menuItem.category,
-                                    size = it.menuItem.size,
-                                    price = it.menuItem.price,
-                                    quantity = it.quantity
-                                )
-                            }
-
-                            items.forEach { orderRepository.insertOrderItem(it) }
-
-                            // Deduct inventory again
-                            for (row in orderRows) {
-                                val recipes = recipeRepository.getRecipesForMenuItem(row.menuItem.id!!)
-                                recipes.forEach { recipe ->
-                                    val totalIngredientQty = recipe.quantityNeeded * row.quantity
-                                    deductInventory(recipe.ingredientId, totalIngredientQty)
-                                }
-                            }
-
-                            // Fetch updated order safely
-                            val fetched = orderRepository.getOrderById(updatedOrder.id)
-                            if (fetched == null) {
-                                Logger.logError(Exception("Order not found after update!"), "Order ID=${updatedOrder.id}")
-                            } else {
-                                savedOrder = fetched
-                                isOldOrder = true
-                            }
-
-                        } else {
-                            val nextOrderNo = orderRepository.getNextOrderNo()
-                            val orderId = orderRepository.insertOrder(
-                                Order(
-                                    id = 0,
-                                    orderNo = nextOrderNo,
-                                    total = total,
-                                    orderType = orderType,
-                                    createdAt = System.currentTimeMillis(),
-                                    deliveryCharges = deliveryCharges,
-                                    serviceCharges = serviceCharges,
-                                    isEdited = false,
-                                    customerPhone = customerPhone,
-                                    customerAddress = customerAddress
-                                )
-                            )
-
-                            val items = orderRows.map {
-                                OrderItem(
-                                    id = 0,
-                                    orderId = orderId,
-                                    menuItemId = it.menuItem.id ?: 0,
-                                    itemName = it.menuItem.name,
-                                    category = it.menuItem.category,
-                                    size = it.menuItem.size,
-                                    price = it.menuItem.price,
-                                    quantity = it.quantity
-                                )
-                            }
-
-                            items.forEach { orderRepository.insertOrderItem(it) }
-
-                            // Deduct inventory
-                            for (row in orderRows) {
-                                val recipes = recipeRepository.getRecipesForMenuItem(row.menuItem.id!!)
-                                recipes.forEach { recipe ->
-                                    val totalIngredientQty = recipe.quantityNeeded * row.quantity
-                                    deductInventory(recipe.ingredientId, totalIngredientQty)
-                                }
-                            }
-
-                            val fetched = orderRepository.getOrderById(orderId)
-                            if (fetched == null) {
-                                Logger.logError(Exception("Order not found after insert!"), "Order ID=$orderId")
-                            } else {
-                                savedOrder = fetched
-                            }
+                // Compute inventory deductions from recipes
+                val deductions = mutableListOf<Pair<Int, Double>>()
+                for (row in rowsToSave) {
+                    val menuItemId = row.menuItem.id ?: 0
+                    if (menuItemId > 0) {
+                        val recipes = recipeRepository.getRecipesForMenuItem(menuItemId)
+                        for (recipe in recipes) {
+                            deductions.add(recipe.ingredientId to (recipe.quantityNeeded * row.quantity))
                         }
-                    } catch (e: Exception) {
-                        Logger.logError(e, "Error in order saving block")
                     }
                 }
 
-                // Only continue if order was actually saved
-                if (savedOrder == null) {
-                    Platform.runLater {
-                        showAlert("Error", "Failed to save order: Database returned null.")
+                if (orderToEdit != null) {
+                    val updatedOrder = orderToEdit.copy(
+                        total = total,
+                        discountAmount = discountAmount,
+                        orderType = orderType,
+                        deliveryCharges = deliveryCharges,
+                        serviceCharges = serviceCharges,
+                        isEdited = true,
+                        customerPhone = customerPhone,
+                        customerAddress = customerAddress
+                    )
+
+                    // Compute inventory to restore from previous items
+                    val restores = mutableListOf<Pair<Int, Double>>()
+                    orderToEdit.items.forEach { oldItem ->
+                        if (oldItem.menuItemId > 0) {
+                            val recipes = recipeRepository.getRecipesForMenuItem(oldItem.menuItemId)
+                            for (recipe in recipes) {
+                                restores.add(recipe.ingredientId to (recipe.quantityNeeded * oldItem.quantity))
+                            }
+                        }
                     }
-                    return@launch
+
+                    savedOrder = orderRepository.updateOrderAtomic(updatedOrder, items, restores, deductions)
+                    isOldOrder = true
+                } else {
+                    val nextOrderNo = orderRepository.getNextOrderNo()
+                    val newOrder = Order(
+                        id = 0,
+                        orderNo = nextOrderNo,
+                        total = total,
+                        orderType = orderType,
+                        createdAt = System.currentTimeMillis(),
+                        deliveryCharges = deliveryCharges,
+                        serviceCharges = serviceCharges,
+                        isEdited = false,
+                        customerPhone = customerPhone,
+                        customerAddress = customerAddress
+                    )
+                    savedOrder = orderRepository.saveOrderAtomic(newOrder, items, deductions)
                 }
 
                 // Printing safely
-                if (printReceiptCheck.isSelected) {
+                if (printAfterSave) {
                     launch(Dispatchers.IO) {
                         try {
                             withTimeoutOrNull(7000) {
-                                receiptPrinter.printReceipt("Black Copper BC-85AC", savedOrder!!, isOldOrder)
+                                receiptPrinter.printReceipt(selectedPrinter!!, savedOrder, isOldOrder)
                             }
                         } catch (ex: Exception) {
                             Logger.logError(ex, "Printing failed")
@@ -389,6 +379,11 @@ class OrderController: DisposableController {
                 Platform.runLater {
                     showAlert("Error", "Failed to save order: ${ex.message ?: ex.toString()}")
                 }
+            } finally {
+                Platform.runLater {
+                    saveOrderButton.isDisable = false
+                    saveOrderButton.text = "Save order"
+                }
             }
         }
     }
@@ -402,7 +397,7 @@ class OrderController: DisposableController {
         orderTypeCombo.selectionModel.selectFirst()
         chargesField.clear()
         chargesField.isDisable = true
-        printReceiptCheck.isSelected = true
+        updateDefaultPrinterSelection()
         printReceiptCheck.isDisable = false
 
         // fetch next order no (non-mutating) in background
@@ -489,10 +484,29 @@ class OrderController: DisposableController {
     override fun dispose() {
         ioScope.cancel()
     }
+
+    private fun updateDefaultPrinterSelection() {
+        val version = ++printerChoiceVersion
+        val configured = !AppSettings.printerName.isNullOrBlank()
+        printReceiptCheck.isSelected = configured
+        if (!configured) {
+            ioScope.launch {
+                val available = runCatching { PrinterService.defaultPrinterName() != null }.getOrDefault(false)
+                Platform.runLater {
+                    if (version == printerChoiceVersion && !printReceiptCheck.isSelected && available && currentOrder == null) {
+                        printReceiptCheck.isSelected = true
+                    }
+                }
+            }
+        }
+    }
 }
 
 object OrderEvents {
     private val listeners = mutableListOf<() -> Unit>()
-    fun addListener(listener: () -> Unit) { listeners.add(listener) }
-    fun notifyOrderAdded() { listeners.forEach { it.invoke() } }
+    fun addListener(listener: () -> Unit): () -> Unit {
+        listeners.add(listener)
+        return { listeners.remove(listener) }
+    }
+    fun notifyOrderAdded() { listeners.toList().forEach { it.invoke() } }
 }

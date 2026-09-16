@@ -1,38 +1,22 @@
 <?xml version="1.0" encoding="UTF-8"?>
-
-<?import javafx.scene.control.*?>
-<?import javafx.scene.layout.*?>
-
-<VBox xmlns:fx="http://javafx.com/fxml"
-      fx:controller="com.innovatewithomer.juiceforu.controller.SettingsController"
-      spacing="15"
-      style="-fx-padding: 20;">
-
-    <!-- Title -->
-    <Label text="⚙ Settings"
-           styleClass="h3"
-           style="-fx-padding: 10;"/>
-
-    <!-- Theme Selector -->
-    <HBox spacing="10">
-        <Label text="Theme:"/>
-        <ChoiceBox fx:id="themeChoice"/>
-    </HBox>
-
-    <!-- Company Info -->
-    <HBox spacing="10">
-        <Label text="Company Name:"/>
-        <TextField fx:id="companyNameField" promptText="Enter name"/>
-    </HBox>
-
-    <HBox spacing="10">
-        <Label text="Contact Email:"/>
-        <TextField fx:id="emailField" promptText="Enter email"/>
-    </HBox>
-
-    <!-- Save Button -->
-    <Button text="Save Settings"
-            onAction="#onSaveSettingsClick"
-            styleClass="btn btn-primary"/>
-
+<?import javafx.scene.control.*?><?import javafx.scene.layout.*?>
+<VBox spacing="16" styleClass="page" xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.innovatewithomer.juiceforu.controller.SettingsController" stylesheets="@./styles/style.css">
+    <VBox spacing="3" styleClass="page-header"><Label text="Application settings" styleClass="section-title"/><Label text="Configure receipt printing, automatic backups, and database maintenance." styleClass="page-subtitle"/></VBox>
+    <VBox spacing="14" styleClass="card">
+        <VBox spacing="3"><Label text="Receipt printer" styleClass="card-title"/><Label text="Orders print to the selected system printer when “Print receipt” is enabled." styleClass="helper-text"/></VBox>
+        <HBox alignment="CENTER_LEFT" spacing="10"><ComboBox fx:id="printerCombo" editable="true" maxWidth="Infinity" HBox.hgrow="ALWAYS" promptText="Select or type a printer name"/><Button text="Refresh printers" onAction="#onRefreshPrintersClick" styleClass="btn-refresh"/></HBox>
+        <Label fx:id="printerStatusLabel" text="Looking for printers…" styleClass="helper-text"/>
+    </VBox>
+    <VBox spacing="14" styleClass="card">
+        <VBox spacing="3"><Label text="Database backups" styleClass="card-title"/><Label text="Backups are consistent standalone SQLite files and can be copied to another computer." styleClass="helper-text"/></VBox>
+        <HBox alignment="CENTER_LEFT" spacing="10"><TextField fx:id="backupDirectoryField" editable="false" maxWidth="Infinity" HBox.hgrow="ALWAYS"/><Button text="Choose folder" onAction="#onChooseBackupDirectoryClick"/></HBox>
+        <CheckBox fx:id="automaticBackupCheck" text="Create one automatic backup each day when the app starts" selected="true"/>
+        <HBox alignment="CENTER_LEFT" spacing="10"><Button fx:id="backupNowButton" text="Back up now" onAction="#onBackupNowClick" styleClass="btn-primary"/><Label fx:id="lastBackupLabel" text="No successful backup recorded yet" styleClass="helper-text"/></HBox>
+    </VBox>
+    <VBox spacing="12" styleClass="card" VBox.vgrow="ALWAYS">
+        <VBox spacing="3"><Label text="Database health" styleClass="card-title"/><Label text="The live database is stored in your private operating-system application-data folder." styleClass="helper-text"/></VBox>
+        <Label text="DATABASE LOCATION" styleClass="eyebrow"/><Label fx:id="databasePathLabel" text="—" wrapText="true"/>
+        <Label fx:id="databaseStatusLabel" text="Checking database…" styleClass="helper-text"/>
+        <HBox><Button text="Run integrity check" onAction="#onCheckDatabaseClick" styleClass="button-edit"/><Region HBox.hgrow="ALWAYS"/><Button text="Save settings" onAction="#onSaveSettingsClick" styleClass="btn-primary"/></HBox>
+    </VBox>
 </VBox>
