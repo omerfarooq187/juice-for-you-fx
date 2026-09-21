@@ -1,11 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<?import javafx.scene.control.*?><?import javafx.scene.layout.*?>
-<VBox spacing="16" styleClass="page" xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.innovatewithomer.juiceforu.controller.SettingsController" stylesheets="@./styles/style.css">
+<?import javafx.scene.control.*?><?import javafx.scene.layout.*?><?import javafx.scene.image.*?>
+<ScrollPane fitToWidth="true" hbarPolicy="NEVER" styleClass="content-host" xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.innovatewithomer.juiceforu.controller.SettingsController" stylesheets="@./styles/style.css">
+<content><VBox spacing="16" styleClass="page">
     <VBox spacing="3" styleClass="page-header"><Label text="Application settings" styleClass="section-title"/><Label text="Configure receipt printing, automatic backups, and database maintenance." styleClass="page-subtitle"/></VBox>
     <VBox spacing="14" styleClass="card">
         <VBox spacing="3"><Label text="Receipt printer" styleClass="card-title"/><Label text="Orders print to the selected system printer when “Print receipt” is enabled." styleClass="helper-text"/></VBox>
         <HBox alignment="CENTER_LEFT" spacing="10"><ComboBox fx:id="printerCombo" editable="true" maxWidth="Infinity" HBox.hgrow="ALWAYS" promptText="Select or type a printer name"/><Button text="Refresh printers" onAction="#onRefreshPrintersClick" styleClass="btn-refresh"/></HBox>
         <Label fx:id="printerStatusLabel" text="Looking for printers…" styleClass="helper-text"/>
+    </VBox>
+    <VBox spacing="12" styleClass="card">
+        <VBox spacing="3"><Label text="Business day" styleClass="card-title"/><Label text="Choose when a new sales day begins. Orders before this time belong to the previous business day." wrapText="true" styleClass="helper-text"/></VBox>
+        <HBox alignment="CENTER_LEFT" spacing="10"><Label text="Day starts at"/><TextField fx:id="businessDayStartField" promptText="01:00" prefColumnCount="6"/><Label text="24-hour time (HH:mm). Use 01:00 for a shop that closes at 1 AM." wrapText="true" styleClass="helper-text"/></HBox>
     </VBox>
     <VBox spacing="14" styleClass="card">
         <VBox spacing="3"><Label text="Database backups" styleClass="card-title"/><Label text="Backups are consistent standalone SQLite files and can be copied to another computer." styleClass="helper-text"/></VBox>
@@ -19,4 +24,17 @@
         <Label fx:id="databaseStatusLabel" text="Checking database…" styleClass="helper-text"/>
         <HBox><Button text="Run integrity check" onAction="#onCheckDatabaseClick" styleClass="button-edit"/><Region HBox.hgrow="ALWAYS"/><Button text="Save settings" onAction="#onSaveSettingsClick" styleClass="btn-primary"/></HBox>
     </VBox>
-</VBox>
+    <VBox spacing="12" styleClass="card about-card">
+        <Label text="About this app" styleClass="card-title"/>
+        <HBox alignment="CENTER_LEFT" spacing="18">
+            <ImageView fx:id="settingsLogo" fitWidth="172" fitHeight="122" preserveRatio="true" smooth="true"/>
+            <VBox alignment="CENTER_LEFT" spacing="7" HBox.hgrow="ALWAYS">
+                <Label fx:id="settingsBusinessNameLabel" text="Point of Sale" styleClass="about-title"/>
+                <Label fx:id="appVersionLabel" text="Point of sale" styleClass="helper-text"/>
+                <Label text="Developed by InnovateWithOmer" styleClass="about-developer" wrapText="true"/>
+                <Hyperlink text="innovatewithomer.dev" onAction="#onDeveloperWebsiteClick" styleClass="developer-link"/>
+            </VBox>
+        </HBox>
+    </VBox>
+</VBox></content>
+</ScrollPane>

@@ -29,6 +29,7 @@ import javafx.scene.layout.HBox
 import javafx.stage.Screen
 import javafx.stage.Stage
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
@@ -172,14 +173,16 @@ class OrderHistoryController : DisposableController {
 
         itemsColumn.setCellFactory {
             object : TableCell<Order, String>() {
-                private val label = Label().apply { isWrapText = true }
+                private val label = Label().apply {
+                    isWrapText = true
+                    maxWidthProperty().bind(itemsColumn.widthProperty().subtract(18.0))
+                }
                 override fun updateItem(item: String?, empty: Boolean) {
                     super.updateItem(item, empty)
                     if (empty || item == null) {
                         graphic = null
                     } else {
                         label.text = item
-                        label.maxWidth = itemsColumn.width - 10
                         graphic = label
                     }
                 }
@@ -251,7 +254,7 @@ class OrderHistoryController : DisposableController {
                 private var updatingCell = false
                 private val comboBox = ComboBox<String>().apply {
                     items = FXCollections.observableArrayList("PENDING", "COMPLETED", "CANCELLED")
-                    prefWidth = 110.0
+                    prefWidth = 125.0
                     style = "-fx-font-size: 13px;"
                     setOnAction {
                         if (updatingCell) return@setOnAction
@@ -406,6 +409,7 @@ class OrderHistoryController : DisposableController {
                     ordersTable.items = FXCollections.observableArrayList(todayOrders)
                 }
             } catch (e: Exception) {
+                if (e is CancellationException) return@launch
                 e.printStackTrace()
                 Logger.logError(e, e.message)
                 Platform.runLater {
@@ -423,6 +427,7 @@ class OrderHistoryController : DisposableController {
                     todaySalesLabel.text = "Today: Rs. ${summary["today"]?.toInt() ?: 0}"
                 }
             } catch (e: Exception) {
+                if (e is CancellationException) return@launch
                 e.printStackTrace()
                 Logger.logError(e, e.message)
                 Platform.runLater { showAlert("Error", "Failed to load sales summary: ${e.message}") }

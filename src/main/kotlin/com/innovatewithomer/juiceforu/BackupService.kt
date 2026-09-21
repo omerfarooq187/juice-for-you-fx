@@ -13,10 +13,11 @@ object BackupService {
     fun createBackup(directory: Path = AppSettings.backupDirectory): Path {
         Files.createDirectories(directory)
         val timestamp = fileTimestamp.format(java.time.LocalDateTime.now())
-        var destination = directory.resolve("juice-for-you-$timestamp.db")
+        val prefix = AppBrand.current.backupFilePrefix
+        var destination = directory.resolve("$prefix-$timestamp.db")
         var suffix = 1
         while (Files.exists(destination)) {
-            destination = directory.resolve("juice-for-you-$timestamp-$suffix.db")
+            destination = directory.resolve("$prefix-$timestamp-$suffix.db")
             suffix++
         }
 

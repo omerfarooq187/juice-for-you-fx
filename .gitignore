@@ -13,4 +13,3 @@ dependency-reduced-pom.xml
 *.log
 .DS_Store
 Thumbs.db
-target/

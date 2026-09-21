@@ -3,13 +3,16 @@ package com.innovatewithomer.juiceforu
 import javafx.fxml.FXML
 import javafx.fxml.FXMLLoader
 import javafx.application.Platform
+import javafx.animation.KeyFrame
+import javafx.animation.Timeline
 import javafx.scene.Node
 import javafx.scene.control.Alert
 import javafx.scene.control.Button
 import javafx.scene.control.Label
+import javafx.scene.image.ImageView
 import javafx.scene.layout.BorderPane
+import javafx.util.Duration
 import com.innovatewithomer.juiceforu.utils.DisposableController
-import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
 class MainMenuController {
@@ -20,6 +23,9 @@ class MainMenuController {
     @FXML
     private lateinit var headerTitle: Label
     @FXML private lateinit var dateLabel: Label
+    @FXML private lateinit var brandLogo: ImageView
+    @FXML private lateinit var brandNameLabel: Label
+    @FXML private lateinit var topBrandNameLabel: Label
     @FXML private lateinit var dashboardButton: Button
     @FXML private lateinit var newOrderButton: Button
     @FXML private lateinit var historyButton: Button
@@ -30,10 +36,16 @@ class MainMenuController {
 
     private var activeController: Any? = null
     private var loadFailures = 0
+    private val dateRefresh = Timeline(KeyFrame(Duration.seconds(30.0), javafx.event.EventHandler { updateBusinessDateLabel() }))
+        .apply { cycleCount = Timeline.INDEFINITE }
 
     @FXML
     fun initialize() {
-        dateLabel.text = LocalDate.now().format(DateTimeFormatter.ofPattern("EEE, d MMM yyyy"))
+        brandLogo.image = BrandAssets.logo
+        brandNameLabel.text = AppBrand.current.businessName
+        topBrandNameLabel.text = AppBrand.current.businessName.uppercase()
+        updateBusinessDateLabel()
+        dateRefresh.play()
         loadView("/com/innovatewithomer/juiceforu/Dashboard.fxml", "Dashboard", dashboardButton)
     }
 
@@ -51,6 +63,7 @@ class MainMenuController {
             activeController = loader.getController<Any>()
             contentArea.center = view
             headerTitle.text = title
+            updateBusinessDateLabel()
             listOf(dashboardButton, newOrderButton, historyButton, menuButton, inventoryButton, recipeButton, settingsButton)
                 .forEach { it.styleClass.remove("active") }
             selectedButton.styleClass.add("active")
@@ -59,6 +72,10 @@ class MainMenuController {
             e.printStackTrace()
             showLoadError("$title could not be opened. ${e.message ?: "Please check the application log."}")
         }
+    }
+
+    private fun updateBusinessDateLabel() {
+        dateLabel.text = BusinessDay.currentDate().format(DateTimeFormatter.ofPattern("EEE, d MMM yyyy"))
     }
 
 
@@ -85,6 +102,7 @@ class MainMenuController {
 
     @FXML
     fun onExitClick() {
+        dateRefresh.stop()
         (activeController as? DisposableController)?.disposeSafely()
         Platform.exit()
     }

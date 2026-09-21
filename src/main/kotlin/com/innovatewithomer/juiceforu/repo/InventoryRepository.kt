@@ -1,6 +1,7 @@
 package com.innovatewithomer.juiceforu.repo
 
 import com.innovatewithomer.juiceforu.Database
+import com.innovatewithomer.juiceforu.StockQuantity
 import com.innovatewithomer.juiceforu.models.InventoryItem
 import java.sql.Connection
 import java.sql.ResultSet
@@ -14,8 +15,8 @@ class InventoryRepository {
             c.prepareStatement(sql).use { stmt ->
                 stmt.setString(1, item.name)
                 stmt.setString(2, item.unit)
-                stmt.setDouble(3, item.quantity)
-                stmt.setDouble(4, item.reorderLevel)
+                stmt.setDouble(3, StockQuantity.round(item.quantity))
+                stmt.setDouble(4, StockQuantity.round(item.reorderLevel))
                 stmt.executeUpdate()
             }
         }
@@ -33,8 +34,8 @@ class InventoryRepository {
             c.prepareStatement(sql).use { stmt ->
                 stmt.setString(1, item.name)
                 stmt.setString(2, item.unit)
-                stmt.setDouble(3, item.quantity)
-                stmt.setDouble(4, item.reorderLevel)
+                stmt.setDouble(3, StockQuantity.round(item.quantity))
+                stmt.setDouble(4, StockQuantity.round(item.reorderLevel))
                 stmt.setInt(5, item.id)
                 stmt.executeUpdate()
             }
@@ -98,12 +99,12 @@ class InventoryRepository {
 
     // --- STOCK ADJUSTMENT ---
     fun adjustStock(id: Int, change: Double, conn: Connection? = null) {
-        val sql = "UPDATE inventory_items SET quantity = quantity + ? WHERE id=? AND quantity + ? >= 0"
+        val sql = "UPDATE inventory_items SET quantity = ROUND(quantity + ?, 2) WHERE id=? AND ROUND(quantity + ?, 2) >= 0"
         val execute = { c: Connection ->
             c.prepareStatement(sql).use { stmt ->
-                stmt.setDouble(1, change)
+                stmt.setDouble(1, StockQuantity.round(change))
                 stmt.setInt(2, id)
-                stmt.setDouble(3, change)
+                stmt.setDouble(3, StockQuantity.round(change))
                 if (stmt.executeUpdate() == 0) {
                     throw IllegalStateException("Inventory item #$id does not exist or has insufficient stock.")
                 }

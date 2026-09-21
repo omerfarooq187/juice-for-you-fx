@@ -296,17 +296,9 @@ class OrderController: DisposableController {
                     )
                 }
 
-                // Compute inventory deductions from recipes
-                val deductions = mutableListOf<Pair<Int, Double>>()
-                for (row in rowsToSave) {
-                    val menuItemId = row.menuItem.id ?: 0
-                    if (menuItemId > 0) {
-                        val recipes = recipeRepository.getRecipesForMenuItem(menuItemId)
-                        for (recipe in recipes) {
-                            deductions.add(recipe.ingredientId to (recipe.quantityNeeded * row.quantity))
-                        }
-                    }
-                }
+                val deductions = recipeRepository.calculateUsage(
+                    rowsToSave.map { (it.menuItem.id ?: 0) to it.quantity }, orderType
+                )
 
                 if (orderToEdit != null) {
                     val updatedOrder = orderToEdit.copy(
@@ -320,16 +312,11 @@ class OrderController: DisposableController {
                         customerAddress = customerAddress
                     )
 
-                    // Compute inventory to restore from previous items
-                    val restores = mutableListOf<Pair<Int, Double>>()
-                    orderToEdit.items.forEach { oldItem ->
-                        if (oldItem.menuItemId > 0) {
-                            val recipes = recipeRepository.getRecipesForMenuItem(oldItem.menuItemId)
-                            for (recipe in recipes) {
-                                restores.add(recipe.ingredientId to (recipe.quantityNeeded * oldItem.quantity))
-                            }
-                        }
-                    }
+                    // Used only for pre-upgrade orders without a saved usage snapshot.
+                    val restores = recipeRepository.calculateUsage(
+                        orderToEdit.items.map { it.menuItemId to it.quantity }, orderToEdit.orderType,
+                        includeConditionalRecipes = false
+                    )
 
                     savedOrder = orderRepository.updateOrderAtomic(updatedOrder, items, restores, deductions)
                     isOldOrder = true

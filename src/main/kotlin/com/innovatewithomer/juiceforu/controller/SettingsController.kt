@@ -1,5 +1,7 @@
 package com.innovatewithomer.juiceforu.controller
 
+import com.innovatewithomer.juiceforu.BrandAssets
+import com.innovatewithomer.juiceforu.AppBrand
 import com.innovatewithomer.juiceforu.AppPaths
 import com.innovatewithomer.juiceforu.AppSettings
 import com.innovatewithomer.juiceforu.BackupService
@@ -14,6 +16,7 @@ import javafx.scene.control.Button
 import javafx.scene.control.CheckBox
 import javafx.scene.control.ComboBox
 import javafx.scene.control.Label
+import javafx.scene.image.ImageView
 import javafx.scene.control.TextField
 import javafx.stage.DirectoryChooser
 import kotlinx.coroutines.CoroutineScope
@@ -22,7 +25,10 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import java.io.File
+import java.awt.Desktop
+import java.net.URI
 import java.time.Instant
+import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
@@ -35,15 +41,24 @@ class SettingsController : DisposableController {
     @FXML private lateinit var databasePathLabel: Label
     @FXML private lateinit var databaseStatusLabel: Label
     @FXML private lateinit var backupNowButton: Button
+    @FXML private lateinit var businessDayStartField: TextField
+    @FXML private lateinit var settingsLogo: ImageView
+    @FXML private lateinit var appVersionLabel: Label
+    @FXML private lateinit var settingsBusinessNameLabel: Label
 
     private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val dateTimeFormatter = DateTimeFormatter.ofPattern("dd MMM yyyy, hh:mm a")
+    private val timeFormatter = DateTimeFormatter.ofPattern("HH:mm")
     private var printerLookupVersion = 0
 
     @FXML
     fun initialize() {
+        settingsLogo.image = BrandAssets.logo
+        settingsBusinessNameLabel.text = AppBrand.current.businessName
+        appVersionLabel.text = "Point of sale · Version ${javaClass.`package`.implementationVersion ?: "Development"}"
         backupDirectoryField.text = AppSettings.backupDirectory.toString()
         automaticBackupCheck.isSelected = AppSettings.automaticBackupEnabled
+        businessDayStartField.text = AppSettings.businessDayStart.format(timeFormatter)
         databasePathLabel.text = Database.currentPath()?.toString() ?: AppPaths.databasePath.toString()
         refreshLastBackupLabel()
         refreshPrinters()
@@ -97,6 +112,11 @@ class SettingsController : DisposableController {
 
     @FXML
     private fun onSaveSettingsClick() {
+        val cutoff = runCatching { LocalTime.parse(businessDayStartField.text.trim(), timeFormatter) }.getOrNull()
+        if (cutoff == null || !businessDayStartField.text.trim().matches(Regex("\\d{2}:\\d{2}"))) {
+            showAlert(Alert.AlertType.WARNING, "Invalid business-day time", "Enter a 24-hour time in HH:mm format, such as 01:00.")
+            return
+        }
         val backupPath = runCatching { java.nio.file.Path.of(backupDirectoryField.text.trim()) }.getOrNull()
         if (backupPath == null || backupDirectoryField.text.isBlank()) {
             showAlert(Alert.AlertType.WARNING, "Invalid backup folder", "Choose a valid folder for database backups.")
@@ -106,8 +126,9 @@ class SettingsController : DisposableController {
         AppSettings.printerName = printerCombo.editor.text.trim().ifBlank { printerCombo.value.orEmpty() }
         AppSettings.backupDirectory = backupPath
         AppSettings.automaticBackupEnabled = automaticBackupCheck.isSelected
+        AppSettings.businessDayStart = cutoff
         AppSettings.save()
-        showAlert(Alert.AlertType.INFORMATION, "Settings saved", "Printer and backup settings were saved for this user.")
+        showAlert(Alert.AlertType.INFORMATION, "Settings saved", "Business days now start at ${cutoff.format(timeFormatter)}. Dashboard and sales reports will use this cutoff.")
     }
 
     @FXML
@@ -146,6 +167,22 @@ class SettingsController : DisposableController {
 
     @FXML
     private fun onCheckDatabaseClick() = checkDatabase(showSuccess = true)
+
+    @FXML
+    private fun onDeveloperWebsiteClick() {
+        ioScope.launch {
+            try {
+                check(Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
+                    "No browser is available on this computer."
+                }
+                Desktop.getDesktop().browse(URI("https://innovatewithomer.dev"))
+            } catch (e: Exception) {
+                Platform.runLater {
+                    showAlert(Alert.AlertType.INFORMATION, "Developer website", "Open https://innovatewithomer.dev in your browser. ${e.message.orEmpty()}")
+                }
+            }
+        }
+    }
 
     private fun checkDatabase(showSuccess: Boolean = false) {
         databaseStatusLabel.text = "Checking database…"

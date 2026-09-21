@@ -1,15 +1,17 @@
 package com.innovatewithomer.juiceforu.controller
 
 import com.innovatewithomer.juiceforu.models.InventoryItem
+import com.innovatewithomer.juiceforu.BrandAssets
+import com.innovatewithomer.juiceforu.StockQuantity
 import com.innovatewithomer.juiceforu.models.MenuItem
 import com.innovatewithomer.juiceforu.models.RecipeItem
+import com.innovatewithomer.juiceforu.models.RecipeUsage
 import com.innovatewithomer.juiceforu.repo.RecipeRepository
 import com.innovatewithomer.juiceforu.repo.InventoryRepository
 import com.innovatewithomer.juiceforu.repo.MenuItemRepository
 import com.innovatewithomer.juiceforu.utils.DisposableController
 import com.innovatewithomer.juiceforu.utils.Logger
 import javafx.application.Platform
-import javafx.beans.property.ReadOnlyObjectWrapper
 import javafx.beans.property.SimpleStringProperty
 import javafx.collections.FXCollections
 import javafx.fxml.FXML
@@ -28,10 +30,12 @@ class RecipeController : DisposableController {
     @FXML private lateinit var menuItemCombo: ComboBox<MenuItem>
     @FXML private lateinit var ingredientCombo: ComboBox<InventoryItem>
     @FXML private lateinit var quantityField: TextField
+    @FXML private lateinit var takeawayDeliveryOnlyCheck: CheckBox
     @FXML private lateinit var recipeTable: TableView<RecipeRow>
     @FXML private lateinit var colIngredient: TableColumn<RecipeRow, String>
-    @FXML private lateinit var colQuantity: TableColumn<RecipeRow, Number>
+    @FXML private lateinit var colQuantity: TableColumn<RecipeRow, String>
     @FXML private lateinit var colUnit: TableColumn<RecipeRow, String>
+    @FXML private lateinit var colUsage: TableColumn<RecipeRow, String>
 
     private val recipeRepo = RecipeRepository()
     private val menuRepo = MenuItemRepository
@@ -48,20 +52,24 @@ class RecipeController : DisposableController {
         menuItemCombo.items = FXCollections.observableArrayList()
         ingredientCombo.items = FXCollections.observableArrayList()
 
-        // Show only the name for Menu Items
+        // Recipes belong to a specific menu variant, not just a product name.
         menuItemCombo.setCellFactory {
             object : ListCell<MenuItem>() {
                 override fun updateItem(item: MenuItem?, empty: Boolean) {
                     super.updateItem(item, empty)
-                    text = if (empty || item == null) "" else item.name
+                    text = if (empty || item == null) null else recipeMenuItemLabel(item)
+                    tooltip = if (empty || item == null) null else Tooltip(text)
                 }
             }
         }
         menuItemCombo.buttonCell = object : ListCell<MenuItem>() {
             override fun updateItem(item: MenuItem?, empty: Boolean) {
                 super.updateItem(item, empty)
-                text = if (empty || item == null) "" else item.name
+                text = if (empty || item == null) null else recipeMenuItemLabel(item)
             }
+        }
+        menuItemCombo.valueProperty().addListener { _, _, selected ->
+            menuItemCombo.tooltip = selected?.let { Tooltip(recipeMenuItemLabel(it)) }
         }
 
         // Show only the name for Ingredients
@@ -82,8 +90,9 @@ class RecipeController : DisposableController {
 
         // Setup table columns
         colIngredient.setCellValueFactory { SimpleStringProperty(it.value.ingredientName) }
-        colQuantity.setCellValueFactory { ReadOnlyObjectWrapper(it.value.quantityNeeded) }
+        colQuantity.setCellValueFactory { SimpleStringProperty(StockQuantity.format(it.value.quantityNeeded)) }
         colUnit.setCellValueFactory { SimpleStringProperty(it.value.unit) }
+        colUsage.setCellValueFactory { SimpleStringProperty(it.value.usage.label) }
 
         recipeTable.items = recipeRows
 
@@ -112,7 +121,8 @@ class RecipeController : DisposableController {
                 ingredientCombo.selectionModel.select(
                     ingredientCombo.items.find { it.id == newSelection.ingredientId }
                 )
-                quantityField.text = newSelection.quantityNeeded.toString()
+                quantityField.text = StockQuantity.format(newSelection.quantityNeeded)
+                takeawayDeliveryOnlyCheck.isSelected = newSelection.usage == RecipeUsage.TAKEAWAY_DELIVERY
             }
         }
     }
@@ -121,13 +131,16 @@ class RecipeController : DisposableController {
     private fun loadRecipesForMenuItem(menuItemId: Int) {
         val version = ++recipeLoadVersion
         recipeRows.clear()
+        quantityField.clear()
+        ingredientCombo.selectionModel.clearSelection()
+        takeawayDeliveryOnlyCheck.isSelected = false
         recipeLoadJob?.cancel()
         val ingredientsById = ingredientCombo.items.associateBy { it.id }
         recipeLoadJob = ioScope.launch {
             try {
                 val rows = recipeRepo.getRecipesForMenuItem(menuItemId).mapNotNull { recipe ->
                     val ingredient = ingredientsById[recipe.ingredientId] ?: return@mapNotNull null
-                    RecipeRow(recipe.id, ingredient.id, ingredient.name, ingredient.unit, recipe.quantityNeeded)
+                    RecipeRow(recipe.id, ingredient.id, ingredient.name, ingredient.unit, recipe.quantityNeeded, recipe.usage)
                 }
                 Platform.runLater {
                     if (version == recipeLoadVersion && menuItemCombo.value?.id == menuItemId) recipeRows.setAll(rows)
@@ -145,9 +158,9 @@ class RecipeController : DisposableController {
     fun handleAddRecipe() {
         val menuItem = menuItemCombo.value
         val ingredient = ingredientCombo.value
-        val qty = quantityField.text.toDoubleOrNull()
+        val qty = StockQuantity.parse(quantityField.text)
         if (menuItem == null || ingredient == null || qty == null || qty <= 0) {
-            showAlert("Incomplete recipe", "Choose a menu item and ingredient, then enter a quantity greater than zero.")
+            showAlert("Incomplete recipe", "Choose a menu item and ingredient, then enter a quantity greater than zero with at most 2 decimal places.")
             return
         }
 
@@ -157,7 +170,8 @@ class RecipeController : DisposableController {
             return
         }
 
-        val recipe = RecipeItem(menuItemId = menuItem.id ?: 0, ingredientId = ingredient.id, quantityNeeded = qty)
+        val recipe = RecipeItem(menuItemId = menuItem.id ?: 0, ingredientId = ingredient.id, quantityNeeded = qty,
+            usage = if (takeawayDeliveryOnlyCheck.isSelected) RecipeUsage.TAKEAWAY_DELIVERY else RecipeUsage.ALL)
         saveRecipeChange(menuItem.id ?: 0) { recipeRepo.addRecipe(recipe) }
     }
 
@@ -168,10 +182,10 @@ class RecipeController : DisposableController {
             return
         }
         val ingredient = ingredientCombo.value
-        val qty = quantityField.text.toDoubleOrNull()
+        val qty = StockQuantity.parse(quantityField.text)
         val menuItem = menuItemCombo.value
         if (ingredient == null || menuItem == null || qty == null || qty <= 0) {
-            showAlert("Invalid recipe", "Choose an ingredient and enter a quantity greater than zero.")
+            showAlert("Invalid recipe", "Choose an ingredient and enter a quantity greater than zero with at most 2 decimal places.")
             return
         }
 
@@ -181,7 +195,8 @@ class RecipeController : DisposableController {
             return
         }
 
-        val recipe = RecipeItem(id = selected.id, menuItemId = menuItem.id ?: 0, ingredientId = ingredient.id, quantityNeeded = qty)
+        val recipe = RecipeItem(id = selected.id, menuItemId = menuItem.id ?: 0, ingredientId = ingredient.id,
+            quantityNeeded = qty, usage = if (takeawayDeliveryOnlyCheck.isSelected) RecipeUsage.TAKEAWAY_DELIVERY else RecipeUsage.ALL)
         saveRecipeChange(menuItem.id ?: 0) { recipeRepo.updateRecipe(recipe) }
     }
 
@@ -196,11 +211,11 @@ class RecipeController : DisposableController {
         val alert = Alert(Alert.AlertType.CONFIRMATION)
         alert.title = "Delete Recipe"
         alert.headerText = "Are you sure you want to delete this recipe?"
-        alert.contentText = "Ingredient: ${selected.ingredientName}, Quantity: ${selected.quantityNeeded} ${selected.unit}"
+        alert.contentText = "Ingredient: ${selected.ingredientName}, Quantity: ${StockQuantity.format(selected.quantityNeeded)} ${selected.unit}"
 
         // ✅ Window icon (top-left corner of dialog window)
         val stage = alert.dialogPane.scene.window as javafx.stage.Stage
-        stage.icons.add(Image(javaClass.getResourceAsStream("/com/innovatewithomer/juiceforu/logo/logo.jpg")))
+        stage.icons.add(BrandAssets.logo)
 
         // ✅ Dialog graphic (small icon next to text)
         val img = Image(javaClass.getResourceAsStream("/com/innovatewithomer/juiceforu/icons/delete.png"))
@@ -235,12 +250,13 @@ class RecipeController : DisposableController {
                 change()
                 val rows = recipeRepo.getRecipesForMenuItem(menuItemId).mapNotNull { recipe ->
                     val ingredient = ingredientsById[recipe.ingredientId] ?: return@mapNotNull null
-                    RecipeRow(recipe.id, ingredient.id, ingredient.name, ingredient.unit, recipe.quantityNeeded)
+                    RecipeRow(recipe.id, ingredient.id, ingredient.name, ingredient.unit, recipe.quantityNeeded, recipe.usage)
                 }
                 Platform.runLater {
                     if (version == recipeLoadVersion && menuItemCombo.value?.id == menuItemId) recipeRows.setAll(rows)
                     quantityField.clear()
                     ingredientCombo.selectionModel.clearSelection()
+                    takeawayDeliveryOnlyCheck.isSelected = false
                 }
             } catch (e: Exception) {
                 Logger.logError(e, "Could not save recipe")
@@ -270,6 +286,13 @@ class RecipeController : DisposableController {
         val ingredientId: Int,
         val ingredientName: String,
         val unit: String,
-        val quantityNeeded: Double
+        val quantityNeeded: Double,
+        val usage: RecipeUsage
     )
+}
+
+internal fun recipeMenuItemLabel(item: MenuItem): String = buildString {
+    append(item.name)
+    if (item.size.isNotBlank()) append(" (${item.size})")
+    if (item.category.isNotBlank()) append(" · ${item.category}")
 }

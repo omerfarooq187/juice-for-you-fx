@@ -1,9 +1,12 @@
 package com.innovatewithomer.juiceforu.controller
 
+import com.innovatewithomer.juiceforu.BusinessDay
 import com.innovatewithomer.juiceforu.repo.DashboardRepository
 import com.innovatewithomer.juiceforu.utils.DisposableController
 import com.innovatewithomer.juiceforu.utils.Logger
 import javafx.application.Platform
+import javafx.animation.KeyFrame
+import javafx.animation.Timeline
 import javafx.beans.property.SimpleStringProperty
 import javafx.collections.FXCollections
 import javafx.fxml.FXML
@@ -12,6 +15,7 @@ import javafx.scene.control.Label
 import javafx.scene.control.TableColumn
 import javafx.scene.control.TableView
 import javafx.scene.control.cell.PropertyValueFactory
+import javafx.util.Duration
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -36,6 +40,14 @@ class DashboardController : DisposableController {
     @FXML private lateinit var avgOrderLabel: Label
 
     private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var displayedBusinessDate = BusinessDay.currentDate()
+    private val rolloverCheck = Timeline(KeyFrame(Duration.seconds(30.0), javafx.event.EventHandler {
+        val date = BusinessDay.currentDate()
+        if (date != displayedBusinessDate) {
+            displayedBusinessDate = date
+            loadDashboard()
+        }
+    })).apply { cycleCount = Timeline.INDEFINITE }
 
     @FXML
     fun initialize() {
@@ -61,6 +73,7 @@ class DashboardController : DisposableController {
         }
 
         loadDashboard()
+        rolloverCheck.play()
     }
 
     private fun loadDashboard() {
@@ -97,7 +110,7 @@ class DashboardController : DisposableController {
     }
 
     override fun dispose() {
+        rolloverCheck.stop()
         ioScope.cancel()
     }
 }
-

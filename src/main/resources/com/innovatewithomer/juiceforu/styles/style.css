@@ -22,6 +22,7 @@
     -fx-padding: 1.6em 1.1em 1.2em 1.1em;
 }
 .brand-mark { -fx-background-color: #f5b944; -fx-background-radius: 14; -fx-min-width: 3em; -fx-min-height: 3em; -fx-alignment: center; -fx-font-size: 1.5em; }
+.brand-logo-frame { -fx-background-color: #ffffff; -fx-background-radius: 9; -fx-padding: 3px; }
 .brand-title { -fx-font-size: 1.35em; -fx-font-weight: 800; -fx-text-fill: white; }
 .brand-subtitle { -fx-font-size: 0.82em; -fx-text-fill: #9fc4b6; }
 .nav-caption { -fx-padding: 1.6em 0.7em 0.4em 0.7em; -fx-font-size: 0.76em; -fx-font-weight: 800; -fx-text-fill: #78a493; }
@@ -64,6 +65,10 @@
 .metric-value-info { -fx-text-fill: #2574a9; }
 .summary-total { -fx-font-size: 1.5em; -fx-font-weight: 800; -fx-text-fill: #16835b; }
 .summary-text { -fx-text-fill: #637269; -fx-font-weight: 600; }
+.about-card { -fx-background-color: #f9fcfa; }
+.about-title { -fx-font-size: 1.35em; -fx-font-weight: 800; -fx-text-fill: #173b30; }
+.about-developer { -fx-font-weight: 700; -fx-text-fill: #315e4d; }
+.developer-link { -fx-text-fill: #126b4c; -fx-padding: 0; -fx-underline: true; }
 
 /* ── Buttons ──────────────────────────────────────────────── */
 .button { -fx-background-color: #eaf0ed; -fx-text-fill: #284138; -fx-font-weight: 700; -fx-cursor: hand; -fx-background-radius: 9; -fx-padding: 0.6em 1em; }

@@ -4,6 +4,7 @@ import javafx.collections.FXCollections
 import javafx.fxml.FXML
 import javafx.scene.control.*
 import com.innovatewithomer.juiceforu.models.InventoryItem
+import com.innovatewithomer.juiceforu.StockQuantity
 import com.innovatewithomer.juiceforu.repo.InventoryRepository
 import com.innovatewithomer.juiceforu.utils.DisposableController
 import com.innovatewithomer.juiceforu.utils.Logger
@@ -41,6 +42,14 @@ class InventoryController : DisposableController {
         colItemId.setCellValueFactory { SimpleIntegerProperty(it.value.id).asObject() }
         colItemName.setCellValueFactory { SimpleStringProperty(it.value.name) }
         colQuantity.setCellValueFactory { SimpleDoubleProperty(it.value.quantity).asObject() }
+        colQuantity.setCellFactory {
+            object : TableCell<InventoryItem, Double>() {
+                override fun updateItem(item: Double?, empty: Boolean) {
+                    super.updateItem(item, empty)
+                    text = if (empty || item == null) null else StockQuantity.format(item)
+                }
+            }
+        }
         colUnit.setCellValueFactory { SimpleStringProperty(it.value.unit) }
 
         inventoryTable.items = inventoryData
@@ -50,7 +59,7 @@ class InventoryController : DisposableController {
         inventoryTable.selectionModel.selectedItemProperty().addListener { _, _, selectedItem ->
             if (selectedItem != null) {
                 itemNameField.text = selectedItem.name
-                quantityField.text = selectedItem.quantity.toString()
+                quantityField.text = StockQuantity.format(selectedItem.quantity)
                 unitField.text = selectedItem.unit
             }
         }
@@ -74,11 +83,11 @@ class InventoryController : DisposableController {
     @FXML
     fun handleAdd() {
         val name = itemNameField.text.trim()
-        val qty = quantityField.text.toDoubleOrNull()
+        val qty = StockQuantity.parse(quantityField.text, allowZero = true)
         val unit = unitField.text.trim()
 
         if (name.isBlank() || unit.isBlank() || qty == null || qty < 0) {
-            showAlert(Alert.AlertType.WARNING, "Validation Error", "Enter a name, unit, and a non-negative quantity.")
+            showAlert(Alert.AlertType.WARNING, "Validation Error", "Enter a name, unit, and a non-negative quantity with at most 2 decimal places.")
             return
         }
 
@@ -110,9 +119,9 @@ class InventoryController : DisposableController {
 
         val name = itemNameField.text.trim()
         val unit = unitField.text.trim()
-        val quantity = quantityField.text.toDoubleOrNull()
+        val quantity = StockQuantity.parse(quantityField.text, allowZero = true)
         if (name.isBlank() || unit.isBlank() || quantity == null || quantity < 0) {
-            showAlert(Alert.AlertType.WARNING, "Validation Error", "Enter a name, unit, and a non-negative quantity.")
+            showAlert(Alert.AlertType.WARNING, "Validation Error", "Enter a name, unit, and a non-negative quantity with at most 2 decimal places.")
             return
         }
         if (inventoryData.any { it.id != id && it.name.equals(name, ignoreCase = true) }) {

@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<?import javafx.scene.control.*?><?import javafx.scene.layout.*?>
+<?import javafx.scene.control.*?><?import javafx.scene.layout.*?><?import javafx.scene.image.*?>
 <HBox styleClass="app-shell" xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.innovatewithomer.juiceforu.MainMenuController" stylesheets="@./styles/style.css">
     <VBox styleClass="sidebar">
-        <HBox alignment="CENTER_LEFT" spacing="11"><Label text="🍹" styleClass="brand-mark"/><VBox spacing="1"><Label text="Juice For U" styleClass="brand-title"/><Label text="POINT OF SALE" styleClass="brand-subtitle"/></VBox></HBox>
+        <HBox alignment="CENTER_LEFT" spacing="11"><StackPane styleClass="brand-logo-frame"><ImageView fx:id="brandLogo" fitWidth="55" fitHeight="40" preserveRatio="true" smooth="true"/></StackPane><VBox spacing="1"><Label fx:id="brandNameLabel" text="Point of Sale" styleClass="brand-title"/><Label text="POINT OF SALE" styleClass="brand-subtitle"/></VBox></HBox>
         <Label text="WORKSPACE" styleClass="nav-caption"/>
         <VBox spacing="5"><Button fx:id="dashboardButton" text="▦   Dashboard" onAction="#onDashboardClick" maxWidth="Infinity" styleClass="btn-sidebar"/><Button fx:id="newOrderButton" text="＋  New order" onAction="#onNewOrderClick" maxWidth="Infinity" styleClass="btn-sidebar"/><Button fx:id="historyButton" text="◷   Order history" onAction="#onOrderHistoryClick" maxWidth="Infinity" styleClass="btn-sidebar"/></VBox>
         <Label text="MANAGEMENT" styleClass="nav-caption"/>
@@ -11,7 +11,7 @@
         <Button text="↪   Exit application" onAction="#onExitClick" maxWidth="Infinity" styleClass="btn-sidebar-exit"/>
     </VBox>
     <BorderPane HBox.hgrow="ALWAYS">
-        <top><HBox alignment="CENTER_LEFT" styleClass="topbar"><VBox spacing="1"><Label text="JUICE FOR U" styleClass="eyebrow"/><Label fx:id="headerTitle" text="Dashboard" styleClass="page-title"/></VBox><Region HBox.hgrow="ALWAYS"/><Label fx:id="dateLabel" text="Today" styleClass="date-pill"/></HBox></top>
+        <top><HBox alignment="CENTER_LEFT" styleClass="topbar"><VBox spacing="1"><Label fx:id="topBrandNameLabel" text="POINT OF SALE" styleClass="eyebrow"/><Label fx:id="headerTitle" text="Dashboard" styleClass="page-title"/></VBox><Region HBox.hgrow="ALWAYS"/><Label fx:id="dateLabel" text="Today" styleClass="date-pill"/></HBox></top>
         <center><BorderPane fx:id="contentArea" styleClass="content-host"/></center>
     </BorderPane>
 </HBox>

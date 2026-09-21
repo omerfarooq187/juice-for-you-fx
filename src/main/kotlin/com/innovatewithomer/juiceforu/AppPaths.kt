@@ -8,29 +8,27 @@ import java.nio.file.StandardCopyOption
 import java.sql.DriverManager
 
 object AppPaths {
-    private const val APP_DIRECTORY = "Juice For U"
-    private const val DATABASE_FILE = "juiceforyou.db"
-
     val dataDirectory: Path by lazy {
         val os = System.getProperty("os.name", "").lowercase()
         val userHome = Paths.get(System.getProperty("user.home"))
         val path = when {
             os.contains("win") -> {
                 val appData = System.getenv("APPDATA")?.takeIf { it.isNotBlank() }
-                if (appData != null) Paths.get(appData, APP_DIRECTORY)
-                else userHome.resolve("AppData").resolve("Roaming").resolve(APP_DIRECTORY)
+                if (appData != null) Paths.get(appData, AppBrand.current.dataDirectoryName)
+                else userHome.resolve("AppData").resolve("Roaming").resolve(AppBrand.current.dataDirectoryName)
             }
-            os.contains("mac") -> userHome.resolve("Library").resolve("Application Support").resolve(APP_DIRECTORY)
+            os.contains("mac") -> userHome.resolve("Library").resolve("Application Support").resolve(AppBrand.current.dataDirectoryName)
             else -> {
                 val xdgData = System.getenv("XDG_DATA_HOME")?.takeIf { it.isNotBlank() }
-                if (xdgData != null) Paths.get(xdgData, "juice-for-you")
-                else userHome.resolve(".local").resolve("share").resolve("juice-for-you")
+                val directory = AppBrand.current.id
+                if (xdgData != null) Paths.get(xdgData, directory)
+                else userHome.resolve(".local").resolve("share").resolve(directory)
             }
         }
         path.toAbsolutePath().normalize()
     }
 
-    val databasePath: Path get() = dataDirectory.resolve(DATABASE_FILE)
+    val databasePath: Path get() = dataDirectory.resolve(AppBrand.current.databaseFileName)
     val settingsPath: Path get() = dataDirectory.resolve("settings.properties")
     val defaultBackupDirectory: Path get() = dataDirectory.resolve("backups")
 
@@ -42,7 +40,7 @@ object AppPaths {
     fun prepareDatabase(): Path {
         Files.createDirectories(dataDirectory)
         val destination = databasePath
-        val legacy = Paths.get(DATABASE_FILE).toAbsolutePath().normalize()
+        val legacy = Paths.get(AppBrand.current.databaseFileName).toAbsolutePath().normalize()
 
         if (!Files.exists(destination) && Files.isRegularFile(legacy) && legacy != destination) {
             migrateDatabase(legacy, destination)

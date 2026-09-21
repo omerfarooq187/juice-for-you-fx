@@ -1,52 +1,106 @@
-name: Build Juice For U MSI
+name: Build Windows installer
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
-  build-windows-msi:
-    runs-on: windows-latest
+  windows-installer:
+    name: Package ${{ matrix.display-name }} MSI
+    runs-on: windows-2025
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - brand-id: juice-for-u
+            display-name: Juice For U
+            artifact-name: JuiceForU
+            icon: src/main/resources/com/innovatewithomer/juiceforu/logo_launcher/logo.ico
+            description: Juice For U point-of-sale application
+            upgrade-uuid: f6bc7c81-bf86-493c-9d79-833775dbc6a4
+          - brand-id: mandra-pizza-hut
+            display-name: Mandra Pizza Hut
+            artifact-name: MandraPizzaHut
+            icon: src/main/resources/com/innovatewithomer/juiceforu/brands/mandra-pizza-hut/logo.ico
+            description: Mandra Pizza Hut point-of-sale application
+            upgrade-uuid: c04bae94-9b2e-46ba-8fd8-46a8da423204
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v3
+      - name: Check out source
+        uses: actions/checkout@v4
 
-    - name: Set up JDK 21
-      uses: actions/setup-java@v3
-      with:
-        distribution: temurin
-        java-version: '21'
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
 
-    - name: Build Maven project
-      run: mvn clean package -DskipTests
+      - name: Build and run tests
+        shell: pwsh
+        run: .\mvnw.cmd -B -ntp clean verify
 
-    - name: Create MSI with jpackage
-      run: |
-        $jar="target/JuiceForU-1.0-shaded.jar"
-        $icon="src\main\resources\com\innovatewithomer\juiceforu\logo_launcher\logo.ico"
-        $dest="target\installer"
-        jpackage `
-          --type msi `
-          --name "Juice For U" `
-          --input "target" `
-          --main-jar "JuiceForU-1.0-shaded.jar" `
-          --main-class "com.innovatewithomer.juiceforu.JuiceForYouApp" `
-          --icon $icon `
-          --dest $dest `
-          --win-shortcut `
-          --win-menu `
-          --win-dir-chooser `
-          --win-per-user-install `
-          --app-version 1.2 `
-          --vendor "InnovateWithOmer" `
-          --description "Juice For U - POS Application" `
-          --verbose
+      - name: Package self-contained MSI
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          [xml]$pom = Get-Content -Raw pom.xml
+          $version = [string]$pom.project.version
+          if ($version -notmatch '^\d+\.\d+\.\d+$') {
+            throw "Application version must be numeric (major.minor.patch): $version"
+          }
+          if ($env:GITHUB_REF_TYPE -eq 'tag' -and $env:GITHUB_REF_NAME -ne "v$version") {
+            throw "Tag $env:GITHUB_REF_NAME does not match pom.xml version $version"
+          }
 
-    - name: Upload MSI artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: JuiceForU-MSI
-        path: target/installer/*.msi
+          $jarName = "JuiceForU-$version-shaded.jar"
+          $jarPath = Join-Path 'target' $jarName
+          if (-not (Test-Path $jarPath)) { throw "Built JAR not found: $jarPath" }
+          $brandId = '${{ matrix.brand-id }}'
+          $inputDir = "target/jpackage-input-$brandId"
+          $outputDir = "target/installer-$brandId"
+          New-Item -ItemType Directory -Force -Path $inputDir, $outputDir | Out-Null
+          Copy-Item $jarPath (Join-Path $inputDir $jarName)
+
+          $jpackageArgs = @(
+            '--type', 'msi',
+            '--name', '${{ matrix.display-name }}',
+            '--input', $inputDir,
+            '--main-jar', $jarName,
+            '--main-class', 'com.innovatewithomer.juiceforu.JuiceForYouAppKt',
+            '--icon', '${{ matrix.icon }}',
+            '--dest', $outputDir,
+            '--app-version', $version,
+            '--vendor', 'InnovateWithOmer',
+            '--description', '${{ matrix.description }}',
+            '--java-options', '--enable-native-access=ALL-UNNAMED',
+            '--java-options', "-Djuiceforu.brand=$brandId",
+            '--win-upgrade-uuid', '${{ matrix.upgrade-uuid }}',
+            '--win-per-user-install',
+            '--win-menu',
+            '--win-shortcut',
+            '--win-dir-chooser'
+          )
+          & jpackage @jpackageArgs
+          if ($LASTEXITCODE -ne 0) { throw "jpackage failed with exit code $LASTEXITCODE" }
+
+          $installers = @(Get-ChildItem $outputDir -Filter '*.msi' -File)
+          if ($installers.Count -ne 1) { throw "Expected one MSI, found $($installers.Count)" }
+          $checksum = (Get-FileHash $installers[0].FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$checksum  $($installers[0].Name)" | Set-Content (Join-Path $outputDir 'SHA256SUMS.txt')
+
+      - name: Upload installer and checksum
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact-name }}-Windows-MSI-${{ github.run_number }}
+          path: target/installer-${{ matrix.brand-id }}/
+          if-no-files-found: error
+          retention-days: 30

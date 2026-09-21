@@ -150,6 +150,7 @@ object Database {
                         discount_amount REAL DEFAULT 0,
                         created_at BIGINT,
                         is_edited INTEGER DEFAULT 0,
+                        inventory_usage_recorded INTEGER NOT NULL DEFAULT 0,
                         address TEXT,
                         phone TEXT
                     )
@@ -208,6 +209,7 @@ object Database {
                         menu_item_id INTEGER NOT NULL,
                         ingredient_id INTEGER NOT NULL,
                         quantity_needed REAL NOT NULL,
+                        fulfillment_scope TEXT NOT NULL DEFAULT 'ALL',
                         FOREIGN KEY (menu_item_id) REFERENCES menu_items(id) ON DELETE CASCADE,
                         FOREIGN KEY (ingredient_id) REFERENCES inventory_items(id) ON DELETE CASCADE
                     )
@@ -225,6 +227,25 @@ object Database {
                     """.trimIndent()
                 )
 
+                // Existing installations gain the new columns without rewriting their data.
+                if (!hasColumn(conn, "recipes", "fulfillment_scope")) {
+                    stmt.executeUpdate("ALTER TABLE recipes ADD COLUMN fulfillment_scope TEXT NOT NULL DEFAULT 'ALL'")
+                }
+                if (!hasColumn(conn, "orders", "inventory_usage_recorded")) {
+                    stmt.executeUpdate("ALTER TABLE orders ADD COLUMN inventory_usage_recorded INTEGER NOT NULL DEFAULT 0")
+                }
+                stmt.executeUpdate(
+                    """
+                    CREATE TABLE IF NOT EXISTS order_inventory_usage (
+                        order_id INTEGER NOT NULL,
+                        ingredient_id INTEGER NOT NULL,
+                        quantity REAL NOT NULL,
+                        PRIMARY KEY (order_id, ingredient_id),
+                        FOREIGN KEY(order_id) REFERENCES orders(id) ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+
                 // 8. Performance Indexes (Non-destructive)
                 stmt.executeUpdate("CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at);")
                 stmt.executeUpdate("CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(order_status);")
@@ -234,6 +255,14 @@ object Database {
             }
         }
     }
+
+    private fun hasColumn(conn: Connection, table: String, column: String): Boolean =
+        conn.createStatement().use { statement ->
+            statement.executeQuery("PRAGMA table_info($table)").use { rows ->
+                while (rows.next()) if (rows.getString("name") == column) return true
+                false
+            }
+        }
 
     /** Creates a transactionally consistent standalone SQLite backup. */
     fun backupTo(destination: Path) {

@@ -15,10 +15,12 @@ import java.util.*
 import javax.imageio.ImageIO
 import com.innovatewithomer.juiceforu.models.Order
 import com.innovatewithomer.juiceforu.models.OrderItem
+import com.innovatewithomer.juiceforu.AppBrand
+import com.innovatewithomer.juiceforu.BrandProfile
 import java.awt.Color
 import javax.print.PrintService
 
-class ReceiptPrinter {
+class ReceiptPrinter(private val brand: BrandProfile = AppBrand.current) {
 
     private val lineWidth = 48
     private val charset = Charset.forName("CP437")
@@ -46,7 +48,7 @@ class ReceiptPrinter {
             write(centerAlign)
             write(doubleHeightOn)
             write(boldOn)
-            write("JUICE FOR U\n".toByteArray(charset))
+            write("${brand.businessName.uppercase()}\n".toByteArray(charset))
             write(normalText)
             write(boldOff)
 
@@ -59,8 +61,8 @@ class ReceiptPrinter {
 
             // --- CONTACT INFO ---
             write(leftAlign)
-            write("Juice For U Near Thandi Sarak\nG.T Road Mandra\n".toByteArray(charset))
-            write("Tel: 051-3591155  WhatsApp: 0309-5107000\n".toByteArray(charset))
+            brand.receiptAddressLines.forEach { write("$it\n".toByteArray(charset)) }
+            write("Tel: ${brand.telephone}  WhatsApp: ${brand.whatsapp}\n".toByteArray(charset))
             write("${"=".repeat(lineWidth)}\n".toByteArray(charset))
             write("ORDER NO: #${order.orderNo}\n".toByteArray(charset))
             write("ORDER TIME: ${sdfDateTime.format(Date(if (order.createdAt > 0) order.createdAt else System.currentTimeMillis()))}\n".toByteArray(charset))
@@ -127,10 +129,13 @@ class ReceiptPrinter {
             // --- FOOTER ---
             write(centerAlign)
             write(boldOn)
-            write("THANKS FOR CHOOSING JUICE FOR U\n\n".toByteArray(charset))
-            write("YOUR SATISFACTION IS OUR PLEASURE\n".toByteArray(charset))
-            write("PLEASE VISIT US AGAIN!\n\n".toByteArray(charset))
+            brand.receiptFooterLines.forEachIndexed { index, line ->
+                write("$line${if (index == 0) "\n\n" else "\n"}".toByteArray(charset))
+            }
+            write("\n".toByteArray(charset))
             write(boldOff)
+            write("Developed by InnovateWithOmer\n".toByteArray(charset))
+            write("innovatewithomer.dev\n\n".toByteArray(charset))
             write(cutPaper)
 
         }.toByteArray()
@@ -149,7 +154,7 @@ class ReceiptPrinter {
 
             // --- OPTIONAL LOGO ---
             try {
-                val imageStream = javaClass.getResourceAsStream("/com/innovatewithomer/juiceforu/logo/logo.jpg")
+                val imageStream = javaClass.getResourceAsStream(brand.receiptLogoResource)
                 if (imageStream != null) {
                     imageStream.use { stream ->
                         val originalImage = ImageIO.read(stream)
@@ -209,4 +214,3 @@ class ReceiptPrinter {
         return adjusted
     }
 }
-

@@ -7,7 +7,7 @@
 
     <groupId>com.innovatewithomer</groupId>
     <artifactId>JuiceForU</artifactId>
-    <version>1.0</version>
+    <version>2.0.0</version>
     <name>Juice For U</name>
 
     <properties>
@@ -158,9 +158,13 @@
                         <phase>package</phase>
                         <goals><goal>shade</goal></goals>
                         <configuration>
+                            <createDependencyReducedPom>false</createDependencyReducedPom>
                             <transformers>
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                                     <mainClass>${main.class}</mainClass>
+                                    <manifestEntries>
+                                        <Implementation-Version>${project.version}</Implementation-Version>
+                                    </manifestEntries>
                                 </transformer>
                             </transformers>
                             <filters>
@@ -173,40 +177,6 @@
                             </filters>
                             <shadedArtifactAttached>true</shadedArtifactAttached>
                             <shadedClassifierName>shaded</shadedClassifierName>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-
-            <!-- Exec Plugin for jpackage -->
-            <plugin>
-                <groupId>org.codehaus.mojo</groupId>
-                <artifactId>exec-maven-plugin</artifactId>
-                <version>3.1.0</version>
-                <executions>
-                    <execution>
-                        <id>jpackage-app</id>
-                        <phase>verify</phase>
-                        <goals><goal>exec</goal></goals>
-                        <configuration>
-                            <executable>${java.home}/bin/jpackage</executable>
-                            <arguments>
-                                <argument>--type</argument><argument>exe</argument>
-                                <argument>--name</argument><argument>Juice For U</argument>
-                                <argument>--input</argument><argument>${project.build.directory}</argument>
-                                <argument>--main-jar</argument><argument>JuiceForU-1.0-shaded.jar</argument>
-                                <argument>--main-class</argument><argument>${main.class}</argument>
-                                <argument>--icon</argument><argument>${project.basedir}/src/main/resources/com/innovatewithomer/juiceforu/logo_launcher/logo.ico</argument>
-                                <argument>--dest</argument><argument>${project.build.directory}/installer</argument>
-                                <argument>--win-shortcut</argument>
-                                <argument>--win-menu</argument>
-                                <argument>--win-dir-chooser</argument>
-                                <argument>--win-per-user-install</argument>
-                                <argument>--app-version</argument><argument>1.2</argument>
-                                <argument>--vendor</argument><argument>InnovateWithOmer</argument>
-                                <argument>--description</argument><argument>Juice For U - POS Application</argument>
-                                <argument>--verbose</argument>
-                            </arguments>
                         </configuration>
                     </execution>
                 </executions>

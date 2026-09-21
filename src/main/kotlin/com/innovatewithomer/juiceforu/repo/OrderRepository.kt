@@ -1,15 +1,15 @@
 package com.innovatewithomer.juiceforu.repo
 
 import com.innovatewithomer.juiceforu.Database
+import com.innovatewithomer.juiceforu.BusinessDay
+import com.innovatewithomer.juiceforu.StockQuantity
 import com.innovatewithomer.juiceforu.models.Order
 import com.innovatewithomer.juiceforu.models.OrderItem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.sql.Connection
 import java.sql.Statement
-import java.text.SimpleDateFormat
-import java.util.Calendar
-import java.util.Date
+import java.math.BigDecimal
 
 class OrderRepository {
 
@@ -23,15 +23,17 @@ class OrderRepository {
         inventoryDeductions: List<Pair<Int, Double>>
     ): Order = withContext(Dispatchers.IO) {
         Database.transaction { conn ->
+            val usage = normalizeInventoryUsage(inventoryDeductions)
             val orderId = insertOrderInternal(conn, order)
             for (item in items) {
                 insertOrderItemInternal(conn, item.copy(orderId = orderId))
             }
-            for ((ingredientId, qty) in inventoryDeductions) {
+            for ((ingredientId, qty) in usage) {
                 if (qty > 0) {
                     adjustInventoryStockInternal(conn, ingredientId, -qty)
                 }
             }
+            recordInventoryUsage(conn, orderId, usage)
             val savedOrder = getOrderByIdInternal(conn, orderId)
                 ?: throw IllegalStateException("Order #$orderId could not be retrieved after atomic save.")
             savedOrder
@@ -52,11 +54,14 @@ class OrderRepository {
         inventoryDeductions: List<Pair<Int, Double>>
     ): Order = withContext(Dispatchers.IO) {
         Database.transaction { conn ->
+            val usage = normalizeInventoryUsage(inventoryDeductions)
+            val restores = if (hasRecordedInventoryUsage(conn, order.id))
+                getRecordedInventoryUsage(conn, order.id) else normalizeInventoryUsage(inventoryRestores)
             updateOrderInternal(conn, order)
 
             // 1. Restore previous inventory
-            for ((ingredientId, qty) in inventoryRestores) {
-                if (qty > 0) {
+            for ((ingredientId, qty) in restores) {
+                if (qty > 0 && inventoryItemExists(conn, ingredientId)) {
                     adjustInventoryStockInternal(conn, ingredientId, qty)
                 }
             }
@@ -68,11 +73,12 @@ class OrderRepository {
             }
 
             // 3. Deduct new inventory
-            for ((ingredientId, qty) in inventoryDeductions) {
+            for ((ingredientId, qty) in usage) {
                 if (qty > 0) {
                     adjustInventoryStockInternal(conn, ingredientId, -qty)
                 }
             }
+            recordInventoryUsage(conn, order.id, usage)
 
             val updatedOrder = getOrderByIdInternal(conn, order.id)
                 ?: throw IllegalStateException("Order #${order.id} could not be retrieved after atomic update.")
@@ -186,8 +192,7 @@ class OrderRepository {
 
     // ✅ Generate next order number safely
     suspend fun getNextOrderNo(): Int = withContext(Dispatchers.IO) {
-        val todayDate = SimpleDateFormat("yyyy-MM-dd").format(Date())
-        val currentHour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+        val todayDate = BusinessDay.currentDate().toString()
 
         Database.transaction { conn ->
             var lastResetDate: String? = null
@@ -201,7 +206,7 @@ class OrderRepository {
                 }
             }
 
-            if (lastResetDate != todayDate && currentHour >= 2) {
+            if (lastResetDate?.let { it < todayDate } ?: true) {
                 conn.prepareStatement(
                     "INSERT INTO order_number_tracker (last_reset_date, last_order_no) VALUES (?, ?)"
                 ).use { insertStmt ->
@@ -267,61 +272,67 @@ class OrderRepository {
     }
 
     private fun adjustInventoryStockInternal(conn: Connection, ingredientId: Int, change: Double) {
-        val sql = "UPDATE inventory_items SET quantity = quantity + ? WHERE id = ? AND quantity + ? >= 0"
+        val sql = "UPDATE inventory_items SET quantity = ROUND(quantity + ?, 2) WHERE id = ? AND ROUND(quantity + ?, 2) >= 0"
         conn.prepareStatement(sql).use { stmt ->
-            stmt.setDouble(1, change)
+            stmt.setDouble(1, StockQuantity.round(change))
             stmt.setInt(2, ingredientId)
-            stmt.setDouble(3, change)
+            stmt.setDouble(3, StockQuantity.round(change))
             if (stmt.executeUpdate() == 0) {
                 throw IllegalStateException("Insufficient inventory for ingredient #$ingredientId.")
             }
         }
     }
 
-    private fun getStartAndEndOfToday(): Pair<Long, Long> {
-        val cal = Calendar.getInstance()
-        cal.set(Calendar.HOUR_OF_DAY, 0)
-        cal.set(Calendar.MINUTE, 0)
-        cal.set(Calendar.SECOND, 0)
-        cal.set(Calendar.MILLISECOND, 0)
-        val start = cal.timeInMillis
+    private fun hasRecordedInventoryUsage(conn: Connection, orderId: Int): Boolean =
+        conn.prepareStatement("SELECT inventory_usage_recorded FROM orders WHERE id = ?").use { stmt ->
+            stmt.setInt(1, orderId)
+            stmt.executeQuery().use { rows -> rows.next() && rows.getInt(1) == 1 }
+        }
 
-        cal.set(Calendar.HOUR_OF_DAY, 23)
-        cal.set(Calendar.MINUTE, 59)
-        cal.set(Calendar.SECOND, 59)
-        cal.set(Calendar.MILLISECOND, 999)
-        val end = cal.timeInMillis
+    private fun inventoryItemExists(conn: Connection, ingredientId: Int): Boolean =
+        conn.prepareStatement("SELECT 1 FROM inventory_items WHERE id = ?").use { stmt ->
+            stmt.setInt(1, ingredientId)
+            stmt.executeQuery().use { it.next() }
+        }
 
-        return start to end
+    private fun getRecordedInventoryUsage(conn: Connection, orderId: Int): List<Pair<Int, Double>> =
+        conn.prepareStatement("SELECT ingredient_id, quantity FROM order_inventory_usage WHERE order_id = ?").use { stmt ->
+            stmt.setInt(1, orderId)
+            stmt.executeQuery().use { rows ->
+                buildList {
+                    while (rows.next()) add(rows.getInt(1) to rows.getDouble(2))
+                }
+            }
+        }
+
+    private fun recordInventoryUsage(conn: Connection, orderId: Int, usage: List<Pair<Int, Double>>) {
+        conn.prepareStatement("DELETE FROM order_inventory_usage WHERE order_id = ?").use { stmt ->
+            stmt.setInt(1, orderId)
+            stmt.executeUpdate()
+        }
+        conn.prepareStatement("INSERT INTO order_inventory_usage (order_id, ingredient_id, quantity) VALUES (?, ?, ?)").use { stmt ->
+            for ((ingredientId, amount) in usage) {
+                if (amount <= 0) continue
+                stmt.setInt(1, orderId)
+                stmt.setInt(2, ingredientId)
+                stmt.setDouble(3, amount)
+                stmt.addBatch()
+            }
+            stmt.executeBatch()
+        }
+        conn.prepareStatement("UPDATE orders SET inventory_usage_recorded = 1 WHERE id = ?").use { stmt ->
+            stmt.setInt(1, orderId)
+            stmt.executeUpdate()
+        }
     }
 
-    private fun getStartAndEndOfLastDays(days: Int): Pair<Long, Long> {
-        val cal = Calendar.getInstance()
-        val end = cal.timeInMillis
-        cal.add(Calendar.DAY_OF_YEAR, -days)
-        val start = cal.timeInMillis
-        return start to end
-    }
-
-    private fun getStartAndEndOfThisMonth(): Pair<Long, Long> {
-        val cal = Calendar.getInstance()
-        cal.set(Calendar.DAY_OF_MONTH, 1)
-        cal.set(Calendar.HOUR_OF_DAY, 0)
-        cal.set(Calendar.MINUTE, 0)
-        cal.set(Calendar.SECOND, 0)
-        cal.set(Calendar.MILLISECOND, 0)
-        val start = cal.timeInMillis
-
-        val calEnd = Calendar.getInstance()
-        calEnd.set(Calendar.DAY_OF_MONTH, calEnd.getActualMaximum(Calendar.DAY_OF_MONTH))
-        calEnd.set(Calendar.HOUR_OF_DAY, 23)
-        calEnd.set(Calendar.MINUTE, 59)
-        calEnd.set(Calendar.SECOND, 59)
-        calEnd.set(Calendar.MILLISECOND, 999)
-        val end = calEnd.timeInMillis
-
-        return start to end
-    }
+    private fun normalizeInventoryUsage(usage: List<Pair<Int, Double>>): List<Pair<Int, Double>> =
+        usage.groupBy({ it.first }, { it.second })
+            .toSortedMap()
+            .map { (ingredientId, values) ->
+                val total = values.fold(BigDecimal.ZERO) { sum, value -> sum.add(BigDecimal.valueOf(value)) }
+                ingredientId to StockQuantity.round(total.toDouble())
+            }.filter { it.second > 0 }
 
     fun getNextOrderId(): Int {
         val sql = "SELECT IFNULL(MAX(id), 0) + 1 FROM orders"
@@ -369,24 +380,24 @@ class OrderRepository {
 
     suspend fun getOrdersByDate(filter: String): List<Order> = withContext(Dispatchers.IO) {
         val orders = mutableListOf<Order>()
-        val (start, end) = when (filter.lowercase()) {
-            "today" -> getStartAndEndOfToday()
-            "weekly" -> getStartAndEndOfLastDays(7)
-            "monthly" -> getStartAndEndOfThisMonth()
-            else -> null to null
+        val range = when (filter.lowercase()) {
+            "today" -> BusinessDay.today()
+            "weekly" -> BusinessDay.lastDays(7)
+            "monthly" -> BusinessDay.thisMonth()
+            else -> null
         }
 
-        val sql = if (start != null && end != null) {
-            "SELECT * FROM orders WHERE created_at BETWEEN ? AND ? ORDER BY created_at DESC"
+        val sql = if (range != null) {
+            "SELECT * FROM orders WHERE created_at >= ? AND created_at < ? ORDER BY created_at DESC"
         } else {
             "SELECT * FROM orders ORDER BY created_at DESC"
         }
 
         Database.getConnection().use { conn ->
             conn.prepareStatement(sql).use { stmt ->
-                if (start != null && end != null) {
-                    stmt.setLong(1, start)
-                    stmt.setLong(2, end)
+                if (range != null) {
+                    stmt.setLong(1, range.startInclusive)
+                    stmt.setLong(2, range.endExclusive)
                 }
                 val rs = stmt.executeQuery()
                 while (rs.next()) {
@@ -484,31 +495,21 @@ class OrderRepository {
     suspend fun getSalesSummary(): Map<String, Double> = withContext(Dispatchers.IO) {
         val sales = mutableMapOf("today" to 0.0, "weekly" to 0.0, "monthly" to 0.0)
 
-        val queries = mapOf(
-            "today" to """
-                SELECT SUM(total) as total FROM orders
-                WHERE DATE(created_at / 1000, 'unixepoch', 'localtime') = DATE('now', 'localtime')
-                  AND order_status != 'CANCELLED'
-            """.trimIndent(),
-            "weekly" to """
-                SELECT SUM(total) as total FROM orders
-                WHERE DATE(created_at / 1000, 'unixepoch', 'localtime') 
-                      >= DATE('now', '-6 days', 'localtime')
-                  AND order_status != 'CANCELLED'
-            """.trimIndent(),
-            "monthly" to """
-                SELECT SUM(total) as total FROM orders
-                WHERE strftime('%Y-%m', created_at / 1000, 'unixepoch', 'localtime') = 
-                      strftime('%Y-%m', 'now', 'localtime')
-                  AND order_status != 'CANCELLED'
-            """.trimIndent()
+        val ranges = mapOf(
+            "today" to BusinessDay.today(),
+            "weekly" to BusinessDay.lastDays(7),
+            "monthly" to BusinessDay.thisMonth()
         )
 
         Database.getConnection().use { conn ->
-            conn.createStatement().use { stmt ->
-                for ((key, sql) in queries) {
-                    stmt.executeQuery(sql).use { rs ->
-                        sales[key] = rs.getDouble("total")
+            conn.prepareStatement(
+                "SELECT IFNULL(SUM(total), 0) AS total FROM orders WHERE created_at >= ? AND created_at < ? AND order_status != 'CANCELLED'"
+            ).use { stmt ->
+                for ((key, range) in ranges) {
+                    stmt.setLong(1, range.startInclusive)
+                    stmt.setLong(2, range.endExclusive)
+                    stmt.executeQuery().use { rs ->
+                        if (rs.next()) sales[key] = rs.getDouble("total")
                     }
                 }
             }
@@ -518,11 +519,13 @@ class OrderRepository {
     }
 
     suspend fun peekNextOrderNo(): Int = withContext(Dispatchers.IO) {
-        val sql = "SELECT last_order_no FROM order_number_tracker ORDER BY id DESC LIMIT 1"
+        val sql = "SELECT last_reset_date, last_order_no FROM order_number_tracker ORDER BY id DESC LIMIT 1"
         Database.getConnection().use { conn ->
             conn.prepareStatement(sql).use { stmt ->
                 val rs = stmt.executeQuery()
-                if (rs.next()) rs.getInt("last_order_no") + 1 else 201
+                if (rs.next() && (rs.getString("last_reset_date") ?: "") >= BusinessDay.currentDate().toString())
+                    rs.getInt("last_order_no") + 1
+                else 201
             }
         }
     }
