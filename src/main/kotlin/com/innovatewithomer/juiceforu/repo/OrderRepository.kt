@@ -28,12 +28,11 @@ class OrderRepository {
             for (item in items) {
                 insertOrderItemInternal(conn, item.copy(orderId = orderId))
             }
-            for ((ingredientId, qty) in usage) {
-                if (qty > 0) {
-                    adjustInventoryStockInternal(conn, ingredientId, -qty)
-                }
+            val appliedUsage = usage.mapNotNull { (ingredientId, qty) ->
+                val deducted = deductInventoryStockInternal(conn, ingredientId, qty)
+                deducted.takeIf { it > 0 }?.let { ingredientId to it }
             }
-            recordInventoryUsage(conn, orderId, usage)
+            recordInventoryUsage(conn, orderId, appliedUsage)
             val savedOrder = getOrderByIdInternal(conn, orderId)
                 ?: throw IllegalStateException("Order #$orderId could not be retrieved after atomic save.")
             savedOrder
@@ -73,12 +72,11 @@ class OrderRepository {
             }
 
             // 3. Deduct new inventory
-            for ((ingredientId, qty) in usage) {
-                if (qty > 0) {
-                    adjustInventoryStockInternal(conn, ingredientId, -qty)
-                }
+            val appliedUsage = usage.mapNotNull { (ingredientId, qty) ->
+                val deducted = deductInventoryStockInternal(conn, ingredientId, qty)
+                deducted.takeIf { it > 0 }?.let { ingredientId to it }
             }
-            recordInventoryUsage(conn, order.id, usage)
+            recordInventoryUsage(conn, order.id, appliedUsage)
 
             val updatedOrder = getOrderByIdInternal(conn, order.id)
                 ?: throw IllegalStateException("Order #${order.id} could not be retrieved after atomic update.")
@@ -272,15 +270,36 @@ class OrderRepository {
     }
 
     private fun adjustInventoryStockInternal(conn: Connection, ingredientId: Int, change: Double) {
-        val sql = "UPDATE inventory_items SET quantity = ROUND(quantity + ?, 2) WHERE id = ? AND ROUND(quantity + ?, 2) >= 0"
+        val sql = "UPDATE inventory_items SET quantity = ROUND(quantity + ?, 2) WHERE id = ?"
         conn.prepareStatement(sql).use { stmt ->
             stmt.setDouble(1, StockQuantity.round(change))
             stmt.setInt(2, ingredientId)
-            stmt.setDouble(3, StockQuantity.round(change))
             if (stmt.executeUpdate() == 0) {
-                throw IllegalStateException("Insufficient inventory for ingredient #$ingredientId.")
+                throw IllegalStateException("Inventory item #$ingredientId does not exist.")
             }
         }
+    }
+
+    /**
+     * Deducts as much stock as available without allowing inventory to go below zero.
+     * The returned amount is persisted with the order so a later edit restores only
+     * what was actually removed from inventory.
+     */
+    private fun deductInventoryStockInternal(conn: Connection, ingredientId: Int, requested: Double): Double {
+        val available = conn.prepareStatement("SELECT quantity FROM inventory_items WHERE id = ?").use { stmt ->
+            stmt.setInt(1, ingredientId)
+            stmt.executeQuery().use { rows ->
+                if (!rows.next()) {
+                    throw IllegalStateException("Inventory item #$ingredientId does not exist.")
+                }
+                rows.getDouble(1)
+            }
+        }
+        val deducted = StockQuantity.round(minOf(available, requested))
+        if (deducted > 0) {
+            adjustInventoryStockInternal(conn, ingredientId, -deducted)
+        }
+        return deducted
     }
 
     private fun hasRecordedInventoryUsage(conn: Connection, orderId: Int): Boolean =

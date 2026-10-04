@@ -243,7 +243,7 @@ class DatabaseTest {
     }
 
     @Test
-    fun testInsufficientStockRollsBackEntireOrder() = runBlocking {
+    fun testInsufficientStockStillSavesOrderAndCapsInventoryAtZero() = runBlocking {
         val ingredient = InventoryItem(0, "Limited Fruit", "kg", 0.5, 0.1)
         inventoryRepo.addItem(ingredient)
         val savedIngredient = inventoryRepo.getAllItems().first { it.name == "Limited Fruit" }
@@ -258,14 +258,11 @@ class DatabaseTest {
         )
         val beforeOrders = orderRepo.getAllOrders().size
 
-        assertThrows(IllegalStateException::class.java) {
-            runBlocking {
-                orderRepo.saveOrderAtomic(order, emptyList(), listOf(savedIngredient.id to 1.0))
-            }
-        }
+        val savedOrder = orderRepo.saveOrderAtomic(order, emptyList(), listOf(savedIngredient.id to 1.0))
 
-        assertEquals(beforeOrders, orderRepo.getAllOrders().size)
-        assertEquals(0.5, inventoryRepo.getItemById(savedIngredient.id)!!.quantity, 0.001)
+        assertNotNull(savedOrder)
+        assertEquals(beforeOrders + 1, orderRepo.getAllOrders().size)
+        assertEquals(0.0, inventoryRepo.getItemById(savedIngredient.id)!!.quantity, 0.001)
     }
 
     @Test
