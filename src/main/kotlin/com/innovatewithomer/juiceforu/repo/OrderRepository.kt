@@ -289,12 +289,10 @@ class OrderRepository {
         val available = conn.prepareStatement("SELECT quantity FROM inventory_items WHERE id = ?").use { stmt ->
             stmt.setInt(1, ingredientId)
             stmt.executeQuery().use { rows ->
-                if (!rows.next()) {
-                    throw IllegalStateException("Inventory item #$ingredientId does not exist.")
-                }
+                if (!rows.next()) return@use null
                 rows.getDouble(1)
             }
-        }
+        } ?: return 0.0
         val deducted = StockQuantity.round(minOf(available, requested))
         if (deducted > 0) {
             adjustInventoryStockInternal(conn, ingredientId, -deducted)

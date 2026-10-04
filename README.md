@@ -1,6 +1,6 @@
 # Juice For U
 
-JavaFX point-of-sale application. Current version: **2.0.1**.
+JavaFX point-of-sale application. Current version: **2.0.2**.
 
 ## Build and test
 
@@ -11,7 +11,7 @@ Use JDK 21 and the included Maven wrapper:
 ```
 
 On Windows, run `mvnw.cmd clean verify` instead. The runnable JAR is
-`target/JuiceForU-2.0.1-shaded.jar` on the build machine's platform.
+`target/JuiceForU-2.0.2-shaded.jar` on the build machine's platform.
 
 ## Windows installers
 
@@ -26,7 +26,7 @@ receipt information, logos, data folders, database names, and installer upgrade
 identities are selected by the packaged brand profile.
 
 It runs for pushes to `main`, pull requests to `main`, version tags (for example
-`v2.0.1`), and manual dispatches. Download either the
+`v2.0.2`), and manual dispatches. Download either the
 `JuiceForU-Windows-MSI-*` or `MandraPizzaHut-Windows-MSI-*` artifact from the
 workflow run; each includes the installer and a SHA-256 checksum.
 The tag must match the version in `pom.xml`.

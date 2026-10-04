@@ -263,6 +263,15 @@ class DatabaseTest {
         assertNotNull(savedOrder)
         assertEquals(beforeOrders + 1, orderRepo.getAllOrders().size)
         assertEquals(0.0, inventoryRepo.getItemById(savedIngredient.id)!!.quantity, 0.001)
+
+        val missingIngredientOrder = order.copy(orderNo = orderRepo.getNextOrderNo())
+        val savedWithMissingIngredient = orderRepo.saveOrderAtomic(
+            missingIngredientOrder,
+            emptyList(),
+            listOf(999999 to 1.0)
+        )
+        assertNotNull(savedWithMissingIngredient)
+        assertEquals(beforeOrders + 2, orderRepo.getAllOrders().size)
     }
 
     @Test
