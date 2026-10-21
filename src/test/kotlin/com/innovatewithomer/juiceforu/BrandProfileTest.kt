@@ -33,6 +33,7 @@ class BrandProfileTest {
             Order(orderNo = 219, total = 700, orderType = "Delivery")
         ).toString(Charset.forName("CP437"))
 
+        assertTrue(receipt.contains("Order #219"))
         assertTrue(receipt.contains("MANDRA PIZZA HUT"))
         assertTrue(receipt.contains("WhatsApp: 0309-5107040"))
         assertTrue(receipt.contains("YOUR OPINION HELPS US IMPROVE"))

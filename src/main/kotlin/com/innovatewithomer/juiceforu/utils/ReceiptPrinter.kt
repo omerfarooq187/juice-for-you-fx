@@ -25,7 +25,26 @@ class ReceiptPrinter(private val brand: BrandProfile = AppBrand.current) {
     private val lineWidth = 48
     private val charset = Charset.forName("CP437")
 
-    fun buildReceiptContent(order: Order, isOldOrder: Boolean = false): ByteArray {
+    fun buildTopOrderNumber(order: Order): ByteArray {
+        val initialize = byteArrayOf(0x1B, 0x40)
+        val rightAlign = byteArrayOf(0x1B, 0x61, 0x02)
+        val boldOn = byteArrayOf(0x1B, 0x45, 0x01)
+        val boldOff = byteArrayOf(0x1B, 0x45, 0x00)
+        val doubleHeightOn = byteArrayOf(0x1B, 0x21, 0x10)
+        val normalText = byteArrayOf(0x1B, 0x21, 0x00)
+
+        return ByteArrayOutputStream().apply {
+            write(initialize)
+            write(rightAlign)
+            write(doubleHeightOn)
+            write(boldOn)
+            write("Order #${order.orderNo}\n".toByteArray(charset))
+            write(normalText)
+            write(boldOff)
+        }.toByteArray()
+    }
+
+    fun buildReceiptContent(order: Order, isOldOrder: Boolean = false, includeTopOrderNo: Boolean = true): ByteArray {
         val sdfDateTime = SimpleDateFormat("dd/MM/yyyy hh:mm a", Locale.getDefault())
 
         val initialize = byteArrayOf(0x1B, 0x40)
@@ -42,7 +61,11 @@ class ReceiptPrinter(private val brand: BrandProfile = AppBrand.current) {
         val colPriceWidth = 12
 
         return ByteArrayOutputStream().apply {
-            write(initialize)
+            if (includeTopOrderNo) {
+                write(buildTopOrderNumber(order))
+            } else {
+                write(initialize)
+            }
 
             // --- HEADER ---
             write(centerAlign)
@@ -64,7 +87,6 @@ class ReceiptPrinter(private val brand: BrandProfile = AppBrand.current) {
             brand.receiptAddressLines.forEach { write("$it\n".toByteArray(charset)) }
             write("Tel: ${brand.telephone}  WhatsApp: ${brand.whatsapp}\n".toByteArray(charset))
             write("${"=".repeat(lineWidth)}\n".toByteArray(charset))
-            write("ORDER NO: #${order.orderNo}\n".toByteArray(charset))
             write("ORDER TIME: ${sdfDateTime.format(Date(if (order.createdAt > 0) order.createdAt else System.currentTimeMillis()))}\n".toByteArray(charset))
             write("ORDER TYPE: ${order.orderType.uppercase()}\n".toByteArray(charset))
 
@@ -152,7 +174,11 @@ class ReceiptPrinter(private val brand: BrandProfile = AppBrand.current) {
             outputStream = PrinterOutputStream(printService)
             escpos = EscPos(outputStream)
 
-            // --- OPTIONAL LOGO ---
+            // --- 1. TOP RIGHT ORDER NUMBER (ABOVE LOGO) ---
+            outputStream.write(buildTopOrderNumber(order))
+            outputStream.flush()
+
+            // --- 2. OPTIONAL LOGO ---
             try {
                 val imageStream = javaClass.getResourceAsStream(brand.receiptLogoResource)
                 if (imageStream != null) {
@@ -180,8 +206,8 @@ class ReceiptPrinter(private val brand: BrandProfile = AppBrand.current) {
                 Logger.logError(imgEx, "Receipt logo print skipped")
             }
 
-            // --- MAIN RECEIPT ---
-            val receiptBytes = buildReceiptContent(order, isOldOrder)
+            // --- 3. MAIN RECEIPT ---
+            val receiptBytes = buildReceiptContent(order, isOldOrder, includeTopOrderNo = false)
             outputStream.write(receiptBytes)
             outputStream.flush()
             escpos.cut(EscPos.CutMode.FULL)
